@@ -1,0 +1,21 @@
+# Secrets - never commit
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# OS
+Thumbs.db
+desktop.ini
+rulebook/
+
+# Generated from your own copy of the rulebook PDF (see README).
+# Not redistributed: the rulebook text is Amtgard Inc.'s work.
+data/raw_text.txt
+data/rules.json
+rules-*-backup.json

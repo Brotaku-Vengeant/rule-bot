@@ -1,0 +1,26 @@
+Copyright (c) 2026 Brandon Guffey. All rights reserved.
+
+This source code is published so that anyone can read it and verify what the
+bot does -- in particular, that it quotes the Amtgard rulebook verbatim and
+never generates or paraphrases rules text. Transparency is the purpose.
+
+That publication is not a grant of rights. No permission is given to copy,
+modify, distribute, sublicense, or create derivative works from this code.
+Viewing and auditing the source is welcome; reuse requires written permission.
+
+If you would like to run this for your own Amtgard group, or build on it, ask
+-- the answer is likely yes. Opening an issue on the repository is fine.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+---
+
+The Amtgard rulebook is the work of Amtgard Inc. and its rules committee, and
+is not covered by this notice. No rulebook text is included in this
+repository: the index the bot reads is generated locally from your own copy of
+the PDF (see the README). This project is not affiliated with or endorsed by
+Amtgard Inc.
