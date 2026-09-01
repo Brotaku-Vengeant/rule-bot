@@ -90,21 +90,11 @@ found. Both are re-runnable when a new rulebook version comes out.
 | `[[gift]]` | Lists the Gift of Air/Earth/Fire/Water choices |
 | `[[flurbo]]` | **No Terms Found**, with nearest-term suggestions |
 | `/rule` | Slash command with autocomplete over all 321 terms |
-| `/servers` | Lists every server the bot is in. Owner-only; the reply is private |
 
 At most 5 `[[lookups]]` per message are answered, to keep spam impossible.
 
-## Knowing which servers have added the bot
-
-The invite link can be reused by anyone, so the bot reports its own membership
-three ways:
-
-- **At startup** it lists every server (name, ID, member count) in the console
-  window. Reconnects log a one-line count instead of repeating the list.
-- **On changes** it logs `ADDED to server:` / `REMOVED from server:` as they
-  happen, so a server added while you were away is still in the scrollback.
-- **`/servers`** shows the same list inside Discord. Only the application owner
-  gets the list; the reply is ephemeral, so it is never posted into a channel.
+There are also a few operational log lines and an owner-only admin command for
+whoever is hosting the bot; they are in `bot/main.py`.
 
 ## When a new rulebook version comes out
 
