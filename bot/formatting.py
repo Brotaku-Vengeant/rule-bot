@@ -28,6 +28,7 @@ CATEGORY_COLORS = {
     "weapon rule": discord.Colour.dark_magenta(),
     "arrow": discord.Colour.dark_teal(),
     "equipment rule": discord.Colour.greyple(),
+    "award": discord.Colour.fuchsia(),
 }
 MISS_COLOR = discord.Colour.red()
 

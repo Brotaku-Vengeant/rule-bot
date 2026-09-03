@@ -167,6 +167,19 @@ SECTIONS = [
         "kind": "chapter",
     },
     {
+        # Appendix A: Knighthood, Masterhood and the nine Ladder Awards.
+        # Definitions are numbered ("3. Lion: Awarded for..."), so heading
+        # detection has to look past the non-bold list marker.
+        "label": "Award Standards",
+        "fixed_section": True,
+        "pages": range(82, 85),      # PDF pages; printed 80-82
+        "heading_size": 9.0,
+        "default_category": "award",
+        "kind": "term",
+        "numbered_headings": True,
+        "tolerant_columns": True,
+    },
+    {
         # Potions (Trinkets), Talismans/Scrolls, and Artifacts share the
         # ability record format, with "Use:" in place of "T:"/"S:".
         "label": "Magic Items",
@@ -180,6 +193,9 @@ SECTIONS = [
 # Nested sub-definition handling (all on printed p.30 in v8.08):
 # School's children are the eight magic schools; Resistant's are its three
 # resistance cases, whose bare names are too generic to stand alone.
+# Leading list markers that precede a bold run-in heading: "3.", "a.", "IV."
+LIST_MARKER_RE = re.compile(r"[0-9]{1,2}\.|[a-z]\.|[IVXivx]{1,5}\.")
+
 QUALIFY_CHILDREN = {"Resistant"}
 CHILD_CATEGORY = {"School": "school"}
 
@@ -293,6 +309,24 @@ def crop_above_made_easy(page):
     if cut <= page.bbox[1] + 5:   # box is the whole page; nothing above it
         return page
     return page.crop((page.bbox[0], page.bbox[1], page.bbox[2], cut - 2))
+
+
+def strip_hanging_marker(row, min_gap: float = 15.0):
+    """Drop a neighbouring column's hanging list marker from the row end.
+
+    Numbered lists hang their markers outside the text block, so the right
+    column's "8." can sit a few points LEFT of the whitespace gutter and get
+    clustered into the left column's row - landing mid-sentence ("beyond the
+    call 8. of duty"). A real trailing word follows normal spacing; these sit
+    behind a 20-45pt gap, which distinguishes them safely.
+    """
+    if len(row) < 2:
+        return row
+    last, prev = row[-1], row[-2]
+    if (LIST_MARKER_RE.fullmatch(last["text"])
+            and last["x0"] - prev["x1"] >= min_gap):
+        return row[:-1]
+    return row
 
 
 def page_lines(page, gutter):
@@ -561,6 +595,8 @@ def build(pdf_path: Path) -> dict:
                     page_rows = ordered_rows(page)
 
                 for row in page_rows:
+                    if spec.get("tolerant_columns"):
+                        row = strip_hanging_marker(row)
                     first = row[0]
 
                     # Subsection header, e.g. "States Defined".
@@ -613,9 +649,19 @@ def build(pdf_path: Path) -> dict:
                                 clean(" ".join(w["text"] for w in row)))
                         continue
 
-                    if is_bold(first, spec["heading_size"]):
+                    # Some sections number their definitions ("3. Lion: Awarded
+                    # for..."), and the marker is NOT bold, so skip past a
+                    # leading list marker before looking for the bold name.
+                    start = 0
+                    if spec.get("numbered_headings"):
+                        while (start < len(row)
+                               and not is_bold(row[start], spec["heading_size"])
+                               and LIST_MARKER_RE.fullmatch(row[start]["text"])):
+                            start += 1
+
+                    if start < len(row) and is_bold(row[start], spec["heading_size"]):
                         lead = []
-                        i = 0
+                        i = start
                         while i < len(row) and is_bold(row[i], spec["heading_size"]):
                             lead.append(row[i]["text"])
                             i += 1

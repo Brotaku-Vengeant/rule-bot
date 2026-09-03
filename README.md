@@ -12,7 +12,7 @@ a term and prints the stored text. Open the JSON to audit exactly what it can sa
 **Coverage:** the Magic & Abilities glossary (179 abilities), States (8), Declarations (3),
 Special Effects (8), the eight magic School definitions, ability mechanics (28), Magic Items — potions, scrolls, talismans, artifacts (29) — and equipment: armor types (11), weapon
 definitions (12), melee weapon and shield types (8), projectiles (6), armor modifiers (4), weapon safety rules (3), arrow components (4),
-and section rulesets incl. shield sizes, bows and siege weapons (11) — 321 entries.
+and section rulesets incl. shield sizes, bows and siege weapons (10), plus Appendix A award standards — Knighthood, Masterhood and the nine Ladder Awards (12) — 333 entries.
 Flavor text is excluded (the rulebook itself notes it is not rules).
 
 All rule text belongs to [Amtgard](https://amtgard.com); this bot is a fan-made
@@ -89,7 +89,7 @@ found. Both are re-runnable when a new rulebook version comes out.
 | `[[insubstantal]]` (typo) | Fuzzy-matches to Insubstantial, labeled "closest match" |
 | `[[gift]]` | Lists the Gift of Air/Earth/Fire/Water choices |
 | `[[flurbo]]` | **No Terms Found**, with nearest-term suggestions |
-| `/rule` | Slash command with autocomplete over all 321 terms |
+| `/rule` | Slash command with autocomplete over all 333 terms |
 
 At most 5 `[[lookups]]` per message are answered, to keep spam impossible.
 

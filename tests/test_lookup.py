@@ -193,3 +193,34 @@ def test_guild_list_embed_fits_discord_limit():
                             me=SimpleNamespace(joined_at=None))
             for i in range(200)]
     assert embed_cost(guild_list_embed(many, "rb")) <= 6000
+
+
+# --- award standards (Appendix A) ---
+
+@real
+def test_ladder_awards_are_indexed():
+    """All nine Ladder Awards, plus Knighthood and Masterhood."""
+    idx = RuleIndex.load()
+    by_name = {e["name"]: e for e in idx.entries}
+
+    ladder = ["Rose", "Smith", "Lion", "Crown", "Owl",
+              "Dragon", "Garber", "Warrior", "Battle"]
+    for name in ladder + ["Knighthood", "Masterhood", "Ladder Awards"]:
+        assert name in by_name, f"{name} missing from the index"
+        assert len(by_name[name]["text"]) > 80
+
+    assert all(by_name[n]["category"] == "award" for n in ladder)
+    assert by_name["Lion"]["section"] == "Award Standards"
+
+
+@real
+def test_award_entries_have_no_column_bleed():
+    """A neighbouring column's hanging list marker must not land mid-sentence."""
+    import re
+
+    idx = RuleIndex.load()
+    for e in idx.entries:
+        if e["category"] != "award":
+            continue
+        # "the call 8. of duty" - a marker wedged between two lowercase words.
+        assert not re.search(r"[a-z] [0-9]{1,2}\. [a-z]", e["text"]), e["name"]
