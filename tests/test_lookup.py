@@ -203,14 +203,20 @@ def test_ladder_awards_are_indexed():
     idx = RuleIndex.load()
     by_name = {e["name"]: e for e in idx.entries}
 
-    ladder = ["Rose", "Smith", "Lion", "Crown", "Owl",
-              "Dragon", "Garber", "Warrior", "Battle"]
+    # Stored under the full title the rulebook uses, so a bare "Warrior" or
+    # "Crown" stays free for the class / other meanings of the same word.
+    ladder = [f"Order of the {n}" for n in
+              ("Rose", "Smith", "Lion", "Crown", "Owl",
+               "Dragon", "Garber", "Warrior", "Battle")]
     for name in ladder + ["Knighthood", "Masterhood", "Ladder Awards"]:
         assert name in by_name, f"{name} missing from the index"
         assert len(by_name[name]["text"]) > 80
 
     assert all(by_name[n]["category"] == "award" for n in ladder)
-    assert by_name["Lion"]["section"] == "Award Standards"
+    assert by_name["Order of the Lion"]["section"] == "Award Standards"
+    # No ladder award may occupy a bare common word.
+    assert not ({"Rose", "Smith", "Lion", "Crown", "Owl", "Dragon",
+                 "Garber", "Warrior", "Battle"} & set(by_name))
 
 
 @real

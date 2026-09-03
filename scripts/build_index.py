@@ -196,6 +196,12 @@ SECTIONS = [
 # Leading list markers that precede a bold run-in heading: "3.", "a.", "IV."
 LIST_MARKER_RE = re.compile(r"[0-9]{1,2}\.|[a-z]\.|[IVXivx]{1,5}\.")
 
+# The nine Ladder Awards (printed pp.80-82), stored as "Order of the <name>".
+# Fixed by the Circle of Monarchs: per Appendix A itself, this list can only
+# change by ninety percent approval of all kingdoms, so it is safe to pin.
+LADDER_AWARDS = {"Rose", "Smith", "Lion", "Crown", "Owl",
+                 "Dragon", "Garber", "Warrior", "Battle"}
+
 QUALIFY_CHILDREN = {"Resistant"}
 CHILD_CATEGORY = {"School": "school"}
 
@@ -725,6 +731,17 @@ def build(pdf_path: Path) -> dict:
                 page.flush_cache()
 
             flush()
+
+    # The rulebook prints ladder awards as bare run-in headings ("Warrior:")
+    # but refers to them throughout as "Order of the Warrior". Storing the bare
+    # word would let an award shadow the far more commonly asked-about thing
+    # of the same name - the Warrior class, the Crown, a Dragon - so they take
+    # the full title the book itself uses. Deliberately NOT aliased back to the
+    # bare word, which must stay free for those other meanings.
+    for e in entries:
+        if e["category"] == "award" and e["name"] in LADDER_AWARDS:
+            e["name"] = f"Order of the {e['name']}"
+            e["slug"] = slugify(e["name"])
 
     # Some names legitimately appear in two chapters - "Magic Balls" is both a
     # game mechanic (printed p.29) and an equipment spec (p.16). The first
