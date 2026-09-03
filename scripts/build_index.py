@@ -550,6 +550,144 @@ CLASS_FIELDS = ("Examples", "Garb", "Look The Part", "Armor", "Shields",
                 "Weapons", "Magic User", "Requirement", "Role-play Suggestion")
 
 
+# Caster spell purchase tables (printed pp.52-59). Seven columns; the level
+# is carried by "Nth Level" separator rows between blocks of spells.
+SPELL_COLS = ("Name", "Cost", "Max", "Frequency", "Type", "School", "Range")
+SPELL_LEVEL_RE = re.compile(r"^(\d+)(?:st|nd|rd|th)\s+Level$")
+COLUMN_TOL = 6.0
+CASTER_PAGES = {"Bard": (54, 55), "Druid": (56, 57),
+                "Healer": (58, 59), "Wizard": (60, 61)}
+ORDINALS = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th", 6: "6th"}
+
+
+def parse_spell_table_page(page) -> list[dict]:
+    """Read one page of a caster's spell purchase table into cells.
+
+    Column positions are taken from the page's OWN header row rather than
+    hardcoded - every caster page carries one, including continuation pages,
+    and the anchors shift a few points between them.
+
+    Each word joins the last column whose anchor it has reached, which is what
+    keeps a long name ("Equipment: Weapon, Short") out of the Cost column and a
+    wrapped frequency ("1/Life Charge x3") out of the Type column; splitting on
+    midpoints between anchors gets both wrong.
+    """
+    words = page.extract_words(extra_attrs=["fontname", "size"])
+    header = {w["text"]: w for w in words
+              if w["text"] in SPELL_COLS and "Bold" in w["fontname"]}
+    if len(header) < len(SPELL_COLS):
+        return []
+
+    anchors = [(c, header[c]["x0"]) for c in SPELL_COLS]
+
+    def column_of(x: float) -> str:
+        pick = SPELL_COLS[0]
+        for col, anchor in anchors:
+            if x + COLUMN_TOL >= anchor:
+                pick = col
+        return pick
+
+    top = header["Name"]["top"]
+    rows: dict[int, list] = {}
+    for w in words:
+        if w["top"] > top + 4:
+            rows.setdefault(round(w["bottom"] / 4.0), []).append(w)
+
+    out = []
+    for key in sorted(rows):
+        cells: dict[str, list[str]] = {}
+        for w in sorted(rows[key], key=lambda w: w["x0"]):
+            cells.setdefault(column_of(w["x0"]), []).append(w["text"])
+        out.append({c: clean(" ".join(cells.get(c, []))).strip()
+                    for c in SPELL_COLS})
+    return out
+
+
+def parse_spell_tables(pdf) -> dict[str, list[dict]]:
+    """Map spell name -> purchase options, plus the raw rows for validation.
+
+    A spell can appear more than once for one class (a Bard may buy
+    Equipment: Armor, 1 Point at 2nd level for 3 points or at 6th for 2), so
+    every row is kept rather than keyed by class.
+    """
+    purchases: dict[str, list[dict]] = {}
+    raw_rows: list[dict] = []
+    for class_name, pages in CASTER_PAGES.items():
+        level = None
+        for pno in pages:
+            page = pdf.pages[pno - 1].filter(keep_obj)
+            for row in parse_spell_table_page(page):
+                joined = " ".join(v for v in row.values() if v).strip()
+                m = SPELL_LEVEL_RE.match(joined)
+                if m:
+                    level = int(m.group(1))
+                    continue
+                if not row["Name"] or not row["Type"]:
+                    continue
+                raw_rows.append(row)
+                purchases.setdefault(row["Name"], []).append({
+                    "class": class_name,
+                    "level": level,
+                    "cost": row["Cost"],
+                    "max": row["Max"],
+                    "frequency": row["Frequency"],
+                })
+            page.flush_cache()
+    return purchases, raw_rows
+
+
+def cross_check_spell_tables(entries: list[dict], raw_rows: list[dict]) -> list[str]:
+    """Verify the purchase tables against the ability glossary.
+
+    The tables repeat Type/School/Range for every spell, which the glossary
+    parse produced independently from different pages. Comparing them
+    validates BOTH: a disagreement means one of the two parses is wrong, so
+    the build fails rather than shipping a quietly corrupt index.
+
+    Two normalisations are legitimate rather than exceptions:
+      - hyphenation ("Magic-Ball" in a table vs "Magic Ball" in the glossary);
+      - Other/Touch, which the rulebook defines as the same reach ("Other:
+        target must be other players ... in Touch range"). Several abilities
+        also carry a per-class range like "Self (Wa), Other (Dr)", so the
+        comparison is containment, not equality.
+    """
+    by_name = {e["name"]: e for e in entries}
+    norm = lambda v: re.sub(r"[-\s]+", " ", (v or "").strip().lower())
+    problems = []
+
+    for row in raw_rows:
+        entry = by_name.get(row["Name"])
+        if entry is None:
+            problems.append(f"{row['Name']}: in a spell table but not the glossary")
+            continue
+        fields = entry.get("fields") or {}
+        for col in ("Type", "School", "Range"):
+            table, glossary = norm(row[col]), norm(fields.get(col))
+            if not table or not glossary or table == "-":
+                continue
+            accept = (("other", "touch") if col == "Range"
+                      and table in ("other", "touch") else (table,))
+            if not any(a in glossary for a in accept):
+                problems.append(
+                    f"{row['Name']} [{col}]: table {row[col]!r} vs "
+                    f"glossary {fields.get(col)!r}")
+    return problems
+
+
+def purchase_line(rows: list[dict]) -> str:
+    """One-line summary of how casters buy a spell."""
+    parts = []
+    for r in sorted(rows, key=lambda r: (r["class"], r["level"] or 0)):
+        bits = [f"cost {r['cost']}"] if r["cost"] else []
+        if r["max"] and r["max"] != "-":
+            bits.append(f"max {r['max']}")
+        if r["frequency"] and r["frequency"] != "-":
+            bits.append(r["frequency"])
+        lvl = ORDINALS.get(r["level"], r["level"])
+        parts.append(f"{r['class']} {lvl}" + (f" ({', '.join(bits)})" if bits else ""))
+    return " · ".join(parts)
+
+
 def parse_classes(pdf, spec) -> list[dict]:
     """Extract the OVERVIEW half of each class section.
 
@@ -881,6 +1019,36 @@ def build(pdf_path: Path) -> dict:
                 page.flush_cache()
 
             flush()
+
+        # Caster classes buy their spells rather than gaining them by level.
+        # That cost/max/frequency data lives in a table on the class pages,
+        # which is the wrong place to answer "what does this cost me?" - so it
+        # is attached to each ability instead.
+        purchases, spell_rows = parse_spell_tables(pdf)
+
+    problems = cross_check_spell_tables(entries, spell_rows)
+    if problems:
+        detail = "\n  ".join(problems[:20])
+        raise SystemExit(
+            "Spell tables disagree with the ability glossary in "
+            f"{len(problems)} place(s):\n  {detail}")
+
+    matched = set()
+    for e in entries:
+        rows = purchases.get(e["name"])
+        if not rows or e["category"] != "ability":
+            continue
+        matched.add(e["name"])
+        e["purchase"] = rows
+        e["text"] = f"{e['text']}\nPurchase: {purchase_line(rows)}"
+
+    unmatched = sorted(set(purchases) - matched)
+    if unmatched:
+        raise SystemExit(
+            "Spell table names with no matching ability entry: "
+            f"{unmatched}\nThe glossary and the purchase tables disagree; "
+            "fix the parse rather than dropping the rows."
+        )
 
     # The rulebook prints ladder awards as bare run-in headings ("Warrior:")
     # but refers to them throughout as "Order of the Warrior". Storing the bare

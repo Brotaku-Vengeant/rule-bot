@@ -309,3 +309,65 @@ def test_classes_carry_overview_only_not_ability_writeups():
     # A bare class name resolves to the class, not the ladder award.
     assert idx.search("warrior").entry["category"] == "class"
     assert idx.search("order of the warrior").entry["category"] == "award"
+
+
+# --- caster spell purchase data ---
+
+@real
+def test_caster_purchase_data_is_attached_to_abilities():
+    """Cost/max/frequency belongs on the spell, not buried in a class table."""
+    idx = RuleIndex.load()
+    by_name = {e["name"]: e for e in idx.entries}
+
+    priced = [e for e in idx.entries if e.get("purchase")]
+    assert len(priced) > 120, f"only {len(priced)} spells carry purchase data"
+    assert all(e["category"] == "ability" for e in priced)
+
+    force_bolt = by_name["Force Bolt"]
+    rows = {r["class"]: r for r in force_bolt["purchase"]}
+    assert rows["Wizard"]["level"] == 1
+    assert rows["Wizard"]["cost"] == "1"
+    assert rows["Wizard"]["max"] == "8"
+    assert rows["Wizard"]["frequency"] == "3 Balls / Unlimited"
+    assert "Purchase:" in force_bolt["text"]
+
+    # Long names must not bleed into the Cost column, nor wrapped
+    # frequencies into Type - the two failure modes of x-position parsing.
+    for e in priced:
+        for r in e["purchase"]:
+            assert r["cost"] and len(r["cost"]) < 6, (e["name"], r)
+            assert r["level"] in range(1, 7), (e["name"], r)
+
+    # A spell can be purchasable twice by one class at different levels.
+    bard_armor = by_name["Equipment: Armor, 1 Point"]["purchase"]
+    assert sorted(r["level"] for r in bard_armor if r["class"] == "Bard") == [2, 6]
+
+    # Non-casters gain abilities by level, so they never appear as a purchase.
+    assert {r["class"] for e in priced for r in e["purchase"]} == {
+        "Bard", "Druid", "Healer", "Wizard"}
+
+
+@real
+def test_spell_table_cross_check_discriminates():
+    """The build-time check must catch real errors, not just pass everything."""
+    from scripts.build_index import cross_check_spell_tables
+
+    entries = [{"name": "Raise Dead",
+                "fields": {"Type": "Verbal", "School": "Death", "Range": "Touch"}},
+               {"name": "Harden Armor",
+                "fields": {"Type": "Enchantment", "School": "Protection",
+                           "Range": "Self (Wa), Other (Dr)"}}]
+
+    # Other/Touch are the same reach per the rulebook's own definitions, and
+    # a per-class range must still match - neither is an error.
+    assert not cross_check_spell_tables(entries, [
+        {"Name": "Raise Dead", "Type": "Verbal", "School": "Death", "Range": "Other"}])
+    assert not cross_check_spell_tables(entries, [
+        {"Name": "Harden Armor", "Type": "Enchantment",
+         "School": "Protection", "Range": "Other"}])
+
+    # A genuine disagreement, and an unknown spell, both fail.
+    assert cross_check_spell_tables(entries, [
+        {"Name": "Raise Dead", "Type": "Magic Ball", "School": "Death", "Range": "Touch"}])
+    assert cross_check_spell_tables(entries, [
+        {"Name": "No Such Spell", "Type": "Verbal", "School": "Death", "Range": "Self"}])
