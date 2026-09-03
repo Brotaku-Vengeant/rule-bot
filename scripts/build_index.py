@@ -167,6 +167,24 @@ SECTIONS = [
         "kind": "chapter",
     },
     {
+        # Class overviews only - description, stat fields, level progression.
+        # The ability write-ups that follow are cut (see parse_classes).
+        "label": "Classes",
+        "pages": range(38, 62),      # PDF pages; printed 36-59
+        "heading_size": 16.0,
+        "default_category": "class",
+        "kind": "class",
+    },
+    {
+        # Color, Monster and Peasant are prose under 14pt headers with no stat
+        # block, as are the general class rules (credits, level thresholds).
+        "label": "Classes",
+        "pages": range(37, 38),      # PDF page; printed 35
+        "heading_size": 14.0,
+        "default_category": "class rule",
+        "kind": "chapter",
+    },
+    {
         # Appendix A: Knighthood, Masterhood and the nine Ladder Awards.
         # Definitions are numbered ("3. Lion: Awarded for..."), so heading
         # detection has to look past the non-bold list marker.
@@ -201,6 +219,11 @@ LIST_MARKER_RE = re.compile(r"[0-9]{1,2}\.|[a-z]\.|[IVXivx]{1,5}\.")
 # change by ninety percent approval of all kingdoms, so it is safe to pin.
 LADDER_AWARDS = {"Rose", "Smith", "Lion", "Crown", "Owl",
                  "Dragon", "Garber", "Warrior", "Battle"}
+
+# Playable classes described as plain prose on printed p.35, with no stat block
+# or level list. They sit among the general class rules, so they are recovered
+# by name rather than by structure.
+PROSE_CLASSES = {"Color", "Monster", "Peasant"}
 
 QUALIFY_CHILDREN = {"Resistant"}
 CHILD_CATEGORY = {"School": "school"}
@@ -286,6 +309,8 @@ CANONICAL_SUBSECTIONS = {
         "Magic Item Rules",
         "Battlegaming With Magic Items",
         "Creating New Magic Items",
+        "Portraying A Class",
+        "Credits and Levels",
     )
 }
 
@@ -514,11 +539,136 @@ def child_entry_name(parent: str, child: str) -> str:
     return child
 
 
+# A progression line starts at a level ordinal, or at one of the labels the
+# rulebook uses for choices and asides. Anything else is a wrapped
+# continuation of the line above ("6th Ancestral Armor (Self) 3/Refresh" /
+# "Charge x10 (ex) (Swift)").
+ORDINAL_RE = re.compile(
+    r"(?:\d+(?:st|nd|rd|th)|Optional|Pick|Reminder|Note)\b")
+SPELL_TABLE_RE = re.compile(r"^Name\s+Cost\s+Max\s+Frequency")
+CLASS_FIELDS = ("Examples", "Garb", "Look The Part", "Armor", "Shields",
+                "Weapons", "Magic User", "Requirement", "Role-play Suggestion")
+
+
+def parse_classes(pdf, spec) -> list[dict]:
+    """Extract the OVERVIEW half of each class section.
+
+    A class section is description + stat fields + level progression, followed
+    by full write-ups of that class's abilities. Those write-ups duplicate the
+    master glossary (Brutal Strike appears on two class pages and in the
+    glossary), so only the overview is indexed.
+
+    The cut is structural, not a guess: the class name is Trajan 16pt and the
+    "Class Abilities" header that ends the overview is Trajan 14pt, so they
+    cannot be confused. Caster classes have no such header and instead end at
+    their spell purchase table, whose columns extract interleaved and would be
+    unreadable anyway; every spell in it is separately indexed.
+    """
+    entries: list[dict] = []
+    current: dict | None = None
+    desc: list[str] = []
+    fields: list[dict] = []
+    prog: list[str] = []
+    prog_title: list[str] = []
+    mode = "desc"
+    stopped = False
+
+    def flush():
+        nonlocal current, desc, fields, prog, prog_title, mode, stopped
+        if current:
+            parts = [join_body(desc)]
+            for f in fields:
+                parts.append(f"**{f['k']}:** {join_body(f['v'])}")
+            if prog:
+                parts.append("")
+                if prog_title:
+                    parts.append(f"**{prog_title[0]}**")
+                parts.extend(prog)
+            current["text"] = "\n".join(p for p in parts if p is not None).strip()
+            current["fields"] = {f["k"]: join_body(f["v"]) for f in fields}
+            if prog:
+                current["progression"] = list(prog)
+            if current["text"]:
+                entries.append(current)
+        current, desc, fields, prog, prog_title = None, [], [], [], []
+        mode, stopped = "desc", False
+
+    for pno in spec["pages"]:
+        page = pdf.pages[pno - 1].filter(keep_obj)
+        for row in page_lines(page, tolerant_gutter(page) or find_gutter(page)):
+            text = clean(" ".join(w["text"] for w in row)).strip()
+            first = row[0]
+            trajan = "TrajanPro-Bold" in first["fontname"]
+
+            # A new class name (Trajan 16) always starts a fresh entry.
+            if trajan and first["size"] > 15:
+                flush()
+                current = {
+                    "name": text,
+                    "slug": slugify(text),
+                    "category": spec["default_category"],
+                    "section": spec["label"],
+                    "page": pno - PAGE_OFFSET,
+                }
+                continue
+
+            # "Class Abilities" (Trajan 14) ends the overview; keep scanning
+            # for the next class name but ignore everything until then.
+            if trajan and 12 < first["size"] < 15:
+                if squash(text) == "classabilities":
+                    stopped = True
+                continue
+
+            if stopped or current is None or not text or text.isdigit():
+                continue
+            if SPELL_TABLE_RE.match(text):     # caster table - stop here
+                stopped = True
+                continue
+
+            if is_bold(first, 10.0):           # "Warrior Abilities By Level"
+                mode = "prog"
+                prog_title.append(text)
+                continue
+
+            if is_bold(first, 9.0):            # run-in stat label
+                lead, i = [], 0
+                while i < len(row) and is_bold(row[i], 9.0):
+                    lead.append(row[i]["text"])
+                    i += 1
+                key = clean(" ".join(lead)).rstrip(":").strip()
+                if key in CLASS_FIELDS:
+                    rest = clean(" ".join(w["text"] for w in row[i:]))
+                    fields.append({"k": key, "v": [rest]})
+                    mode = "field"
+                    continue
+
+            if mode == "prog":
+                # Progression rows wrap ("6th Ancestral Armor (Self) 3/Refresh"
+                # / "Charge x10 (ex) (Swift)"), and the archetype choices sit
+                # under "Optional - Pick one:". Only a row opening with an
+                # ordinal or "Optional" starts a new line.
+                if prog and not ORDINAL_RE.match(text):
+                    prog[-1] = f"{prog[-1]} {text}"
+                else:
+                    prog.append(text)
+            elif mode == "field" and fields:
+                fields[-1]["v"].append(text)
+            else:
+                desc.append(text)
+        page.flush_cache()
+
+    flush()
+    return entries
+
+
 def build(pdf_path: Path) -> dict:
     entries: list[dict] = []
 
     with pdfplumber.open(pdf_path) as pdf:
         for spec in SECTIONS:
+            if spec["kind"] == "class":
+                entries.extend(parse_classes(pdf, spec))
+                continue
             subsection = None
             current: dict | None = None
             body_lines: list[str] = []
@@ -738,6 +888,10 @@ def build(pdf_path: Path) -> dict:
     # of the same name - the Warrior class, the Crown, a Dragon - so they take
     # the full title the book itself uses. Deliberately NOT aliased back to the
     # bare word, which must stay free for those other meanings.
+    for e in entries:
+        if e["name"] in PROSE_CLASSES and e["category"] == "class rule":
+            e["category"] = "class"
+
     for e in entries:
         if e["category"] == "award" and e["name"] in LADDER_AWARDS:
             e["name"] = f"Order of the {e['name']}"

@@ -214,9 +214,15 @@ def test_ladder_awards_are_indexed():
 
     assert all(by_name[n]["category"] == "award" for n in ladder)
     assert by_name["Order of the Lion"]["section"] == "Award Standards"
-    # No ladder award may occupy a bare common word.
-    assert not ({"Rose", "Smith", "Lion", "Crown", "Owl", "Dragon",
-                 "Garber", "Warrior", "Battle"} & set(by_name))
+    # No AWARD may occupy a bare common word - those belong to the class,
+    # the equipment term, or whatever else shares the name. Other categories
+    # are welcome to them: "Warrior" is correctly the Warrior class.
+    bare = {"Rose", "Smith", "Lion", "Crown", "Owl", "Dragon",
+            "Garber", "Warrior", "Battle"}
+    squatters = [n for n in bare & set(by_name)
+                 if by_name[n]["category"] == "award"]
+    assert not squatters, f"awards squatting on bare names: {squatters}"
+    assert by_name["Warrior"]["category"] == "class"
 
 
 @real
@@ -230,3 +236,76 @@ def test_award_entries_have_no_column_bleed():
             continue
         # "the call 8. of duty" - a marker wedged between two lowercase words.
         assert not re.search(r"[a-z] [0-9]{1,2}\. [a-z]", e["text"]), e["name"]
+
+
+# --- verbatim fidelity ---
+
+@real
+def test_every_field_value_appears_verbatim_in_the_source():
+    """No stored value may differ from the rulebook, not even by a word.
+
+    The bot's whole claim is that it quotes the book exactly, so every field
+    and progression line is checked against the extraction dump. Comparison
+    ignores whitespace only: the PDF's curly-quote glyphs extract with stray
+    padding (I: " Thy burdens...) which the index legitimately normalises, but
+    a dropped or altered WORD still fails.
+    """
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    dump = (root / "data" / "raw_text.txt")
+    if not dump.exists():
+        pytest.skip("raw_text.txt not built")
+
+    squash = lambda s: re.sub(r"\s+", "", s)
+    haystack = squash(dump.read_text(encoding="utf-8"))
+
+    idx = RuleIndex.load()
+    checked, bad = 0, []
+    for e in idx.entries:
+        values = list((e.get("fields") or {}).values())
+        values += list(e.get("progression") or [])
+        for v in values:
+            if len(v) <= 12:
+                continue
+            checked += 1
+            if squash(v) not in haystack:
+                bad.append((e["name"], v[:70]))
+
+    assert checked > 500, f"expected a substantial sweep, checked {checked}"
+    assert not bad, f"{len(bad)} values not verbatim: {bad[:5]}"
+
+
+@real
+def test_classes_carry_overview_only_not_ability_writeups():
+    """Class entries must stop at the 'Class Abilities' boundary.
+
+    The per-class pages repeat full write-ups of that class's abilities, which
+    are already indexed from the master glossary. Only the overview belongs
+    here, so the ability record markers must be absent entirely.
+    """
+    idx = RuleIndex.load()
+    by_name = {e["name"]: e for e in idx.entries}
+
+    for name in ("Anti-Paladin", "Archer", "Assassin", "Barbarian", "Monk",
+                 "Paladin", "Scout", "Warrior", "Bard", "Druid", "Healer",
+                 "Wizard", "Monster", "Peasant", "Color"):
+        assert name in by_name, f"{name} missing"
+        assert by_name[name]["category"] == "class"
+
+    # Insult's write-up begins immediately after Warrior's cut point.
+    warrior = by_name["Warrior"]
+    assert "I command thy attention" not in warrior["text"]
+    for marker in ("T: Verbal", "S: Protection", "I enchant thee",
+                   "Name Cost Max"):
+        for name in ("Warrior", "Wizard", "Archer"):
+            assert marker not in by_name[name]["text"], f"{marker} leaked into {name}"
+
+    # Stat block and progression both survive the cut.
+    assert warrior["fields"]["Armor"] == "6pts"
+    assert warrior["fields"]["Shields"] == "Large"
+    assert any(line.startswith("1st") for line in warrior["progression"])
+    # A bare class name resolves to the class, not the ladder award.
+    assert idx.search("warrior").entry["category"] == "class"
+    assert idx.search("order of the warrior").entry["category"] == "award"
