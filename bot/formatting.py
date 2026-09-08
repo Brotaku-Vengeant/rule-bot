@@ -28,6 +28,13 @@ CATEGORY_COLORS = {
     "weapon rule": discord.Colour.dark_magenta(),
     "arrow": discord.Colour.dark_teal(),
     "equipment rule": discord.Colour.greyple(),
+    # Dor Un Avathar (monster book) - greens and browns, visually distinct
+    # from the rulebook's blues and golds.
+    "monster": discord.Colour.dark_green(),
+    "monster ability": discord.Colour.green(),
+    "monster mechanic": discord.Colour.dark_teal(),
+    "terrain": discord.Colour.dark_orange(),
+    "scenario mechanic": discord.Colour.magenta(),
     "class": discord.Colour.blue(),
     "class rule": discord.Colour.dark_blue(),
     "award": discord.Colour.fuchsia(),
@@ -35,11 +42,22 @@ CATEGORY_COLORS = {
 MISS_COLOR = discord.Colour.red()
 
 
-def truncate(text: str, page: int | str, limit: int = DESCRIPTION_LIMIT) -> str:
+def entry_where(e: dict) -> str:
+    """Where to send a reader for an entry's full text.
+
+    Only the rulebook has printed pages; the Dor Un Avathar is a Google Doc,
+    so its entries point at a section instead.
+    """
+    if e.get("page"):
+        return f"p.{e['page']}"
+    return e.get("section") or e.get("source") or "the source book"
+
+
+def truncate(text: str, where: str, limit: int = DESCRIPTION_LIMIT) -> str:
     """Cut on a line/sentence boundary, never mid-sentence, and say so."""
     if len(text) <= limit:
         return text
-    notice = f"\n\n*...truncated - see p.{page} of the rulebook for the rest.*"
+    notice = f"\n\n*...truncated - see {where} for the rest.*"
     room = limit - len(notice)
     cut = text[:room]
     # Prefer the last paragraph break, then sentence end, then word break.
@@ -59,17 +77,23 @@ def entry_embed(result: Result, rulebook: str) -> discord.Embed:
 
     embed = discord.Embed(
         title=title,
-        description=truncate(e["text"], e["page"]),
+        description=truncate(e["text"], entry_where(e)),
         colour=CATEGORY_COLORS.get(e["category"], discord.Colour.greyple()),
     )
     if result.kind == "fuzzy":
         embed.set_author(name=f'Closest match for "{result.query}"')
-    embed.set_footer(text=f"{rulebook} - {e['section']}, p.{e['page']}")
+    # Each entry cites its own book: the rulebook has printed page numbers,
+    # the Dor Un Avathar is a Google Doc with none, so it cites its section.
+    book = e.get("source") or rulebook
+    cite = f"{book} - {e['section']}"
+    if e.get("page"):
+        cite += f", p.{e['page']}"
+    embed.set_footer(text=cite)
     return embed
 
 
 def ambiguous_embed(result: Result) -> discord.Embed:
-    lines = [f"- **{e['name']}**  ({e['category']}, p.{e['page']})"
+    lines = [f"- **{e['name']}**  ({e['category']}, {entry_where(e)})"
              for e in result.suggestions]
     return discord.Embed(
         title=f'"{result.query}" matches several entries',
@@ -132,10 +156,13 @@ def fit_embeds(embeds: list[discord.Embed],
     for embed in embeds:
         if len(embed.description or "") <= cap:
             continue
-        page = "?"
-        if embed.footer and embed.footer.text:
-            page = embed.footer.text.rsplit("p.", 1)[-1] or "?"
-        embed.description = truncate(embed.description, page, limit=cap)
+        where = "the source book"
+        footer = embed.footer.text if embed.footer else ""
+        if ", p." in footer:
+            where = "p." + footer.rsplit("p.", 1)[-1]
+        elif " - " in footer:
+            where = footer.split(" - ", 1)[-1]
+        embed.description = truncate(embed.description, where, limit=cap)
     return embeds
 
 

@@ -19,3 +19,4 @@ rulebook/
 data/raw_text.txt
 data/rules.json
 rules-*-backup.json
+data/dua.json

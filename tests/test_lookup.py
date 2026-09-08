@@ -264,6 +264,10 @@ def test_every_field_value_appears_verbatim_in_the_source():
     idx = RuleIndex.load()
     checked, bad = 0, []
     for e in idx.entries:
+        # Rulebook entries only; Dor Un Avathar entries come from a different
+        # source document and are checked separately below.
+        if "Spongy" not in (e.get("source") or ""):
+            continue
         values = list((e.get("fields") or {}).values())
         values += list(e.get("progression") or [])
         for v in values:
@@ -371,3 +375,79 @@ def test_spell_table_cross_check_discriminates():
         {"Name": "Raise Dead", "Type": "Magic Ball", "School": "Death", "Range": "Touch"}])
     assert cross_check_spell_tables(entries, [
         {"Name": "No Such Spell", "Type": "Verbal", "School": "Death", "Range": "Self"}])
+
+
+# --- Dor Un Avathar (second source book) ---
+
+@real
+def test_dua_entries_are_verbatim_from_the_google_doc():
+    """Same fidelity rule as the rulebook, against the monster book's source.
+
+    The Dor Un Avathar is a Google Doc rather than a PDF, so the snapshot is
+    the HTML export. Tags are stripped and whitespace ignored; a dropped or
+    altered WORD still fails.
+    """
+    import html as htmlmod
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    snapshot = root / "rulebook" / "dua11.html"
+    if not snapshot.exists():
+        pytest.skip("dua11.html snapshot not present")
+
+    from scripts.build_dua import REPLACEMENTS
+
+    raw = re.sub(r"data:image/[^\"']+", "IMG",
+                 snapshot.read_text(encoding="utf-8", errors="replace"))
+    text = htmlmod.unescape(re.sub(r"<[^>]+>", " ", raw))
+    # The build maps the doc's typographic characters to ASCII (curly quotes,
+    # en dashes, ligatures); apply the same map here so the comparison ignores
+    # that documented substitution while still catching an altered WORD.
+    for bad, good in REPLACEMENTS.items():
+        text = text.replace(bad, good)
+    squash = lambda s: re.sub(r"\s+", "", s)
+    haystack = squash(text)
+
+    idx = RuleIndex.load()
+    dua = [e for e in idx.entries if e.get("source") == "Dor Un Avathar XI"]
+    assert len(dua) > 80, f"only {len(dua)} DUA entries loaded"
+
+    checked, bad = 0, []
+    for e in dua:
+        # Every stat-block value, plus the leading description paragraph -
+        # the parts of an entry that are quoted rather than composed.
+        values = list((e.get("fields") or {}).values())
+        first_line = (e.get("text") or "").splitlines()[0] if e.get("text") else ""
+        if not first_line.startswith("**"):
+            values.append(first_line)
+        for v in values:
+            if len(v) <= 12:
+                continue
+            checked += 1
+            if squash(v) not in haystack:
+                bad.append((e["name"], v[:70]))
+    assert checked > 190, f"only {checked} values checked"
+    assert not bad, f"{len(bad)} altered value(s): {bad[:5]}"
+
+
+@real
+def test_both_books_load_and_cite_themselves():
+    idx = RuleIndex.load()
+    by_name = {e["name"]: e for e in idx.entries}
+
+    assert by_name["Brutal Strike"]["source"].startswith("Amtgard")
+    assert by_name["Beastfolk"]["source"] == "Dor Un Avathar XI"
+
+    # Monsters have no printed page; the rulebook does.
+    assert by_name["Brutal Strike"].get("page")
+    assert not by_name["Beastfolk"].get("page")
+
+    # Every entry knows which book it came from.
+    assert all(e.get("source") for e in idx.entries)
+
+    # Tier coverage, and the abilities monsters reference.
+    monsters = [e for e in idx.entries if e["category"] == "monster"]
+    assert len(monsters) == 54
+    assert len({e["section"] for e in monsters}) == 4
+    assert by_name["Strong"]["category"] == "monster ability"

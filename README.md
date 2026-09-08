@@ -34,6 +34,20 @@ run it for your own Amtgard group, ask — the answer is likely yes.
 your machine from your own copy of the rulebook PDF, and is gitignored. See
 [Building the index](#building-the-index) below.
 
+## Sources
+
+The bot answers from two books, each indexed by its own pipeline into its own
+file, so either can be rebuilt without touching the other:
+
+| Book | Source | Built by | Citation style |
+|---|---|---|---|
+| Amtgard Rules of Play v8.08 "Spongy" | PDF | `scripts/build_index.py` | section + printed page |
+| Dor Un Avathar XI | Google Doc | `scripts/build_dua.py` | section (a doc has no pages) |
+
+Neither book's text is in this repository; both indexes are generated locally
+and gitignored. The Dor Un Avathar build records a hash of the snapshot it read
+and the date it was fetched, since a Google Doc can change under you.
+
 ## Building the index
 
 The repository ships the tooling, not the rulebook. To produce the index the
@@ -47,6 +61,12 @@ bot reads:
    ```
    python scripts/extract_pdf.py
    python scripts/build_index.py
+   ```
+
+3. For the monster book, fetch and build it (no manual download needed):
+
+   ```
+   python scripts/build_dua.py --fetch
    ```
 
 `extract_pdf.py` writes a plain-text dump you can eyeball, and

@@ -14,6 +14,7 @@ from pathlib import Path
 from rapidfuzz import fuzz, process
 
 DEFAULT_INDEX = Path(__file__).resolve().parent.parent / "data" / "rules.json"
+DUA_INDEX = Path(__file__).resolve().parent.parent / "data" / "dua.json"
 
 # Below this score a candidate is noise; above ACCEPT it's a confident match.
 FUZZY_ACCEPT = 88.0
@@ -57,7 +58,10 @@ class Result:
         """Plain-text rendering, used by the CLI and tests."""
         if self.kind in ("exact", "fuzzy"):
             e = self.entry
-            head = f"{e['name']}  [{e['category']}, p.{e['page']}]"
+            # Only the rulebook has printed pages; the Dor Un Avathar is a
+            # Google Doc and cites its section instead.
+            where = f"p.{e['page']}" if e.get("page") else e.get("section", "")
+            head = f"{e['name']}  [{e['category']}{', ' + where if where else ''}]"
             if self.kind == "fuzzy":
                 head += f"   (closest match for {self.query!r})"
             return f"{head}\n{e['text']}"
@@ -81,10 +85,40 @@ class RuleIndex:
         self._fuzzy_keys = list(self._by_key)
 
     @classmethod
-    def load(cls, path: Path = DEFAULT_INDEX) -> "RuleIndex":
-        data = json.loads(path.read_text(encoding="utf-8"))
-        idx = cls(data["entries"])
-        idx.rulebook = data.get("rulebook", "")
+    def load(cls, *paths: Path) -> "RuleIndex":
+        """Load and merge every index file that exists.
+
+        The bot answers from two books - the rulebook PDF and the Dor Un
+        Avathar - built by separate pipelines into separate files, so either
+        can be re-indexed without rebuilding the other. Each entry carries its
+        own "source", which is what the citation footer uses; the index-level
+        name is only a fallback for entries predating that field.
+
+        The rulebook is loaded first, so if a future edition of either book
+        ever introduces a name the other already uses, the rulebook keeps the
+        bare term and the later one is reachable by its qualified name.
+        """
+        paths = paths or (DEFAULT_INDEX, DUA_INDEX)
+        entries: list[dict] = []
+        sources: list[str] = []
+        for path in paths:
+            if not path.exists():
+                continue
+            data = json.loads(path.read_text(encoding="utf-8"))
+            book = data.get("rulebook", "")
+            for entry in data["entries"]:
+                entry.setdefault("source", book)
+            entries.extend(data["entries"])
+            if book:
+                sources.append(book)
+        if not entries:
+            raise FileNotFoundError(
+                f"No index found. Looked in: {', '.join(str(p) for p in paths)}. "
+                "Run scripts/build_index.py (and scripts/build_dua.py)."
+            )
+        idx = cls(entries)
+        idx.rulebook = sources[0] if sources else ""
+        idx.sources = sources
         return idx
 
     def names(self) -> list[str]:
