@@ -451,3 +451,36 @@ def test_both_books_load_and_cite_themselves():
     assert len(monsters) == 54
     assert len({e["section"] for e in monsters}) == 4
     assert by_name["Strong"]["category"] == "monster ability"
+
+
+@real
+def test_no_monster_is_missing_its_stat_block():
+    """Completeness, not just fidelity.
+
+    Checking that stored values are verbatim cannot catch a parser that
+    silently DROPS a row -- which is how 45 of 54 monsters once lost their
+    Abilities while every remaining value still passed the verbatim sweep.
+    Every monster must carry the four core stats and its ability list.
+    """
+    idx = RuleIndex.load()
+    monsters = [e for e in idx.entries if e["category"] == "monster"]
+    assert len(monsters) == 54
+
+    required = ("Garb", "Armor", "Shields", "Weapons", "Abilities")
+    missing = [(e["name"], f) for e in monsters for f in required
+               if not (e.get("fields") or {}).get(f)]
+    assert not missing, f"{len(missing)} monster field(s) missing: {missing[:8]}"
+
+    # Ability lists are the substantive part; they must not be empty stubs.
+    thin = [e["name"] for e in monsters if len(e["fields"]["Abilities"]) < 8]
+    assert not thin, f"suspiciously short ability lists: {thin}"
+
+    # Homebrew Notes exist on many monsters and were dropped wholesale once.
+    with_notes = [e for e in monsters if e["fields"].get("Homebrew Note")]
+    assert len(with_notes) > 15, f"only {len(with_notes)} homebrew notes"
+
+    dragon = next(e for e in monsters if e["name"] == "Dragon")
+    for ability in ("Flying (T)", "Monstrous Resistance (3)",
+                    "Fireball 10 Balls / Unlimited (m)", "Throw 2/Life"):
+        assert ability in dragon["fields"]["Abilities"], ability
+    assert "underwater dragon" in dragon["fields"]["Homebrew Note"]

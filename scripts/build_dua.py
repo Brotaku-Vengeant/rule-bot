@@ -53,8 +53,12 @@ SECTION_CATEGORY = {
 
 # Stat-block rows whose label is a real field. "Frequency" is the header of the
 # abilities column, not a field of its own.
-STAT_LABELS = {"Garb", "Armor", "Shields", "Weapons", "Abilities",
-               "Note", "Notes", "Homebrew Note", "Homebrew Notes"}
+NOTE_LABELS = ("Homebrew Notes", "Homebrew Note", "Notes", "Note")
+STAT_LABELS = {"Garb", "Armor", "Shields", "Weapons", "Abilities", *NOTE_LABELS}
+
+# Field order for rendering, so entries read like the printed card.
+FIELD_ORDER = ("Garb", "Armor", "Shields", "Weapons", "Abilities",
+               "Note", "Notes", "Homebrew Note", "Homebrew Notes")
 
 REPLACEMENTS = {
     "ﬀ": "ff", "ﬁ": "fi", "ﬂ": "fl",
@@ -108,25 +112,68 @@ def parse_stat_block(table_html: str) -> tuple[dict, str]:
     """
     fields: dict[str, str] = {}
     description = ""
-    expecting_abilities = False
+    abilities: list[str] = []
+    notes: list[str] = []
+    subheadings: list[str] = []
+    unconsumed: list[str] = []
+    in_abilities = False
 
     for cells in table_rows(table_html):
-        if len(cells) == 1:
-            body = cells[0]
-            if body.startswith("Description:"):
-                description = clean(body[len("Description:"):])
-            elif expecting_abilities:
-                fields["Abilities"] = body
-                expecting_abilities = False
+        if len(cells) == 2:
+            label, value = clean(cells[0]).rstrip(":"), cells[1]
+            # "Abilities | Frequency" is a column header, not a field: the
+            # list itself follows in full-width rows underneath.
+            if label == "Abilities" and clean(value) in ("Frequency", ""):
+                in_abilities = True
+            elif label in STAT_LABELS:
+                fields[label] = value
+                in_abilities = False
+            elif ":" in label and ":" in clean(value):
+                # Neither cell is a label: the four Elementals close with two
+                # homebrew variants side by side ("Greater Air Elemental: ..."
+                # || "Primal Air Elemental: ...").
+                notes.extend([clean(cells[0]), clean(value)])
+                in_abilities = False
+            elif clean(cells[0]) or clean(value):
+                unconsumed.append(f"{label} | {value}"[:80])
             continue
 
-        label, value = clean(cells[0]).rstrip(":"), cells[1]
-        if label == "Abilities" and clean(value) == "Frequency":
-            expecting_abilities = True
-        elif label in STAT_LABELS:
-            fields[label] = value
+        body = cells[0]
+        head = clean(body.split("\n", 1)[0])
 
-    return fields, description
+        # A label written inline, e.g. "Homebrew Note: Dragons come in..."
+        inline = next((lbl for lbl in NOTE_LABELS
+                       if head.lower().startswith(lbl.lower() + ":")), None)
+        if body.startswith("Description:"):
+            description = clean(body[len("Description:"):])
+            in_abilities = False
+        elif inline:
+            fields[inline] = clean(body[len(inline) + 1:])
+            in_abilities = False
+        elif head.rstrip(":") in ("Abilities", "Abilities Frequency"):
+            # Most monsters head the list with a bare full-width "Abilities"
+            # cell rather than the two-cell "Abilities | Frequency" form.
+            in_abilities = True
+            rest = body.split("\n", 1)
+            if len(rest) > 1 and rest[1].strip():
+                abilities.append(rest[1].strip())
+        elif in_abilities:
+            # The list can run across several consecutive full-width rows.
+            abilities.append(body)
+        elif clean(body) and len(head) < 40 and "\n" not in body.strip():
+            # A short standalone row is a sub-header inside the card, not
+            # content: Hydra/Kraken labels its stat block "Hydra Body".
+            subheadings.append(head)
+        elif clean(body):
+            unconsumed.append(head[:80])
+
+    if abilities:
+        fields["Abilities"] = "\n".join(abilities)
+    if notes:
+        existing = fields.get("Homebrew Note")
+        fields["Homebrew Note"] = "\n".join(
+            ([existing] if existing else []) + notes)
+    return fields, description, subheadings, unconsumed
 
 
 def build(snapshot: Path) -> dict:
@@ -139,6 +186,7 @@ def build(snapshot: Path) -> dict:
 
     blocks = list(re.finditer(r"<(h[1-6]|table)\b[^>]*>(.*?)</\1>", html, re.S))
     entries: list[dict] = []
+    dropped: list[tuple[str, list[str]]] = []
     section = None
 
     for i, block in enumerate(blocks):
@@ -174,16 +222,22 @@ def build(snapshot: Path) -> dict:
         if category == "monster":
             if not follows_table:
                 continue          # a heading with no stat block is not a monster
-            fields, description = parse_stat_block(blocks[i + 1].group(2))
+            fields, description, subheadings, unconsumed = parse_stat_block(
+                blocks[i + 1].group(2))
             if not fields:
                 continue
+            if unconsumed:
+                dropped.append((text, unconsumed))
             entry["fields"] = fields
-            entry["text"] = "\n".join(
-                [description] +
-                [f"**{k}:** {v}" for k, v in fields.items() if k != "Abilities"] +
-                ([f"**Abilities:**\n{fields['Abilities']}"]
-                 if fields.get("Abilities") else [])
-            ).strip()
+            ordered = [k for k in FIELD_ORDER if fields.get(k)]
+            ordered += [k for k in fields if k not in FIELD_ORDER]
+            parts = [description] if description else []
+            parts += [f"**{h}**" for h in subheadings]
+            for k in ordered:
+                # Multi-line values (the ability list) get their own block.
+                parts.append(f"**{k}:**\n{fields[k]}" if "\n" in fields[k]
+                             else f"**{k}:** {fields[k]}")
+            entry["text"] = "\n".join(parts).strip()
         else:
             # Reference definitions: prose paragraphs up to the next heading.
             end = blocks[i + 1].start() if i + 1 < len(blocks) else len(html)
@@ -194,6 +248,16 @@ def build(snapshot: Path) -> dict:
 
         if entry.get("text"):
             entries.append(entry)
+
+    # Completeness, not just fidelity. Verifying that what IS stored is
+    # verbatim cannot catch a parser that silently DROPS a row - which is
+    # exactly how 45 of 54 monsters once lost their Abilities. Any table cell
+    # the parser did not account for fails the build.
+    if dropped:
+        detail = "\n  ".join(f"{name}: {rows}" for name, rows in dropped[:10])
+        raise SystemExit(
+            f"Unparsed stat-block content in {len(dropped)} monster(s):"
+            f"\n  {detail}")
 
     # A later duplicate would shadow an earlier one; qualify it by section
     # rather than dropping it.
