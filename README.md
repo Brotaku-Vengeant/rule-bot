@@ -1,19 +1,38 @@
 # Amtgard Rules Bot
 
 A Scryfall-style Discord bot for Amtgard: type `[[Brutal Strike]]` or
-`[[Insubstantial]]` in any message and the bot replies with that entry quoted
-**verbatim** from the *Amtgard v8.08 "Spongy"* rulebook, with a page citation.
-There's also a `/rule` slash command with autocomplete over every indexed term.
+`[[Beastfolk]]` in any message and the bot replies with that entry quoted
+**verbatim** from the rulebook or the monster book, with a citation. There's
+also a `/rule` slash command with autocomplete over every indexed term.
 
 The bot never paraphrases or generates rule text. A one-time extraction pass
-turns the rulebook PDF into `data/rules.json`; at runtime the bot only matches
-a term and prints the stored text. Open the JSON to audit exactly what it can say.
+turns each source book into a JSON index; at runtime the bot only matches a
+term and prints the stored text. Open the JSON to audit exactly what it can say.
 
-**Coverage:** the Magic & Abilities glossary (179 abilities), States (8), Declarations (3),
-Special Effects (8), the eight magic School definitions, ability mechanics (28), Magic Items — potions, scrolls, talismans, artifacts (29) — and equipment: armor types (11), weapon
-definitions (12), melee weapon and shield types (8), projectiles (6), armor modifiers (4), weapon safety rules (3), arrow components (4),
-and section rulesets incl. shield sizes, bows and siege weapons (10), plus Appendix A award standards — Knighthood, Masterhood and the nine Ladder Awards (12) — 333 entries.
-Flavor text is excluded (the rulebook itself notes it is not rules).
+**Coverage: 439 entries across two books.**
+
+*Amtgard Rules of Play v8.08 "Spongy"* — 350 entries:
+
+| | |
+|---|---|
+| Abilities | 179, with caster purchase costs folded in |
+| Classes | 15, overview and level progression |
+| Mechanics · States · Special Effects | 28 · 8 · 8 |
+| Magic Items | 29 — potions, scrolls, talismans, artifacts |
+| Equipment | 58 — armor types and modifiers, weapon and shield types, projectiles, arrows, safety rules, shield sizes, bows, siege |
+| Awards | 12 — Knighthood, Masterhood, the nine Ladder Awards |
+| Schools · Declarations | 8 · 3 |
+
+*Dor Un Avathar XI* — 89 entries:
+
+| | |
+|---|---|
+| Monsters | 54 across all four tiers |
+| Monster abilities | 17 — `Strong`, `Flying`, `Thick Skin`… |
+| Terrain · Scenario mechanics · Monster mechanics | 8 · 8 · 2 |
+
+Flavor text is excluded (the rulebook itself notes it is not rules), as are the
+monster book's blank homebrew cards, design guidelines, and scenario write-ups.
 
 All rule text belongs to [Amtgard](https://amtgard.com); this bot is a fan-made
 lookup tool for club use.
@@ -30,9 +49,9 @@ This is source-available, not open source: the code is published for
 inspection, and copyright is retained (see [LICENSE](LICENSE)). If you want to
 run it for your own Amtgard group, ask — the answer is likely yes.
 
-**No rulebook text is in this repository.** `data/rules.json` is generated on
-your machine from your own copy of the rulebook PDF, and is gitignored. See
-[Building the index](#building-the-index) below.
+**Neither book's text is in this repository.** `data/rules.json` and
+`data/dua.json` are generated on your machine from your own copy of the
+sources, and are gitignored. See [Building the index](#building-the-index).
 
 ## Sources
 
@@ -109,7 +128,8 @@ found. Both are re-runnable when a new rulebook version comes out.
 | `[[insubstantal]]` (typo) | Fuzzy-matches to Insubstantial, labeled "closest match" |
 | `[[gift]]` | Lists the Gift of Air/Earth/Fire/Water choices |
 | `[[flurbo]]` | **No Terms Found**, with nearest-term suggestions |
-| `/rule` | Slash command with autocomplete over all 333 terms |
+| `[[beastfolk]]` | Monster stat block from the *Dor Un Avathar XI* |
+| `/rule` | Slash command with autocomplete over all 439 terms |
 
 At most 5 `[[lookups]]` per message are answered, to keep spam impossible.
 
@@ -130,7 +150,7 @@ The bot reads message content only to find `[[...]]` lookups, and does not
 store messages, log who asked what, or track users. It has no database; the
 only thing it writes is that console log. See `bot/main.py`.
 
-## When a new rulebook version comes out
+## When a new edition comes out
 
 ```
 .venv\Scripts\python scripts\extract_pdf.py --pdf "path\to\new.pdf"
@@ -140,6 +160,9 @@ only thing it writes is that console log. See `bot/main.py`.
 .venv\Scripts\python -m pytest
 ```
 
+For the monster book, `python scripts/build_dua.py --fetch` re-downloads and
+rebuilds; the printed snapshot hash tells you whether the doc actually changed.
+
 `scripts/build_index.py` detects entries by **font** (bold headings at specific
 sizes), not regex, so it should survive layout-compatible revisions. The
 `--report` output and the test suite are the safety net. If the page offset
@@ -147,17 +170,18 @@ changes, update `PAGE_OFFSET` there (printed folio = PDF page − offset).
 
 ## Deploying later (24/7)
 
-The bot is stateless: `bot/` + `data/rules.json` + a `DISCORD_TOKEN` env var
-is everything. `Dockerfile` builds a minimal image for Railway/Fly.io/any VPS;
+The bot is stateless: `bot/` + the two index files (`data/rules.json`,
+`data/dua.json`) + a `DISCORD_TOKEN` env var is everything. `Dockerfile` builds a minimal image for Railway/Fly.io/any VPS;
 set `DISCORD_TOKEN` in the host's secret store, never in the image.
 
 ## Layout
 
 ```
-scripts/extract_pdf.py   PDF -> data/raw_text.txt   (auditable text dump)
+scripts/extract_pdf.py   rulebook PDF -> data/raw_text.txt (auditable dump)
 scripts/build_index.py   raw text -> data/rules.json (+ --report / --query)
-bot/lookup.py            matching engine (no Discord imports; unit-tested)
-bot/formatting.py        embeds, incl. 4096-char truncation on a boundary
-bot/main.py              Discord client: [[...]] listener + /rule command
+scripts/build_dua.py     monster book -> data/dua.json  (+ --fetch / --report)
+bot/lookup.py            matching engine; merges both indexes (no Discord imports)
+bot/formatting.py        embeds, incl. per-book citations and the 6000-char budget
+bot/main.py              Discord client: [[...]] listener + /rule, /servers
 tests/test_lookup.py     python -m pytest
 ```
