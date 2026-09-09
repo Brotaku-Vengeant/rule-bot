@@ -113,8 +113,22 @@ found. Both are re-runnable when a new rulebook version comes out.
 
 At most 5 `[[lookups]]` per message are answered, to keep spam impossible.
 
-There are also a few operational log lines and an owner-only admin command for
-whoever is hosting the bot; they are in `bot/main.py`.
+### What the host can see
+
+Disclosed for completeness, since the point of publishing this source is that
+nothing about the bot is hidden. None of it is unusual — Discord reports this
+to every bot automatically — but you should not have to read the code to know
+it exists.
+
+- `/servers` lists the servers the bot is in (name, ID, member count, join
+  date). Only the account that owns the Discord application can run it, and the
+  reply is ephemeral, so the list is never posted into a channel.
+- The console log records the servers at startup, and a line whenever the bot
+  is added to or removed from one.
+
+The bot reads message content only to find `[[...]]` lookups, and does not
+store messages, log who asked what, or track users. It has no database; the
+only thing it writes is that console log. See `bot/main.py`.
 
 ## When a new rulebook version comes out
 
