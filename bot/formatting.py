@@ -166,7 +166,38 @@ def fit_embeds(embeds: list[discord.Embed],
     return embeds
 
 
+def list_embed(result: Result, rulebook: str) -> discord.Embed:
+    """Every entry in a category, e.g. [[states]]."""
+    entries = result.suggestions
+    lines = [f"- **{e['name']}**" for e in entries]
+    if result.related:
+        lines.append("")
+        lines.append("See also: " + ", ".join(f"**{e['name']}** ({e.get('source') or rulebook})"
+                                             for e in result.related))
+    lines.append("")
+    lines.append("Type `[[name]]` for the full definition.")
+
+    embed = discord.Embed(
+        title=f"{result.title} ({len(entries)})",
+        description="\n".join(lines),
+        colour=CATEGORY_COLORS.get(entries[0]["category"], discord.Colour.greyple())
+        if entries else MISS_COLOR,
+    )
+    # Cite the shared location when every entry comes from one place, as the
+    # rulebook's States all do (States Defined, one page).
+    places = {(e.get("source") or rulebook, e.get("section"), e.get("page"))
+              for e in entries}
+    if len(places) == 1:
+        book, section, page = places.pop()
+        embed.set_footer(text=f"{book} - {section}" + (f", p.{page}" if page else ""))
+    elif entries:
+        embed.set_footer(text=" / ".join(sorted({p[0] for p in places})))
+    return embed
+
+
 def render(result: Result, rulebook: str) -> discord.Embed:
+    if result.kind == "list":
+        return list_embed(result, rulebook)
     if result.kind in ("exact", "fuzzy"):
         return entry_embed(result, rulebook)
     if result.kind == "ambiguous":

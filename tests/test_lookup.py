@@ -484,3 +484,39 @@ def test_no_monster_is_missing_its_stat_block():
                     "Fireball 10 Balls / Unlimited (m)", "Throw 2/Life"):
         assert ability in dragon["fields"]["Abilities"], ability
     assert "underwater dragon" in dragon["fields"]["Homebrew Note"]
+
+
+# --- list commands ---
+
+def test_states_command_lists_the_category_not_one_entry():
+    toy = RuleIndex(TOY + [
+        {"name": "Custom States", "aliases": [], "category": "scenario mechanic",
+         "section": "Scenario Mechanics", "text": "Game-specific states."},
+    ])
+    r = toy.search("States")
+    assert r.kind == "list"
+    assert [e["name"] for e in r.suggestions] == ["Insubstantial"]
+    assert [e["name"] for e in r.related] == ["Custom States"]
+    # Case and punctuation insensitive, like every other lookup.
+    assert toy.search("  STATES! ").kind == "list"
+    # The individual state is still an ordinary lookup.
+    assert toy.search("insubstantial").kind == "exact"
+
+
+@real
+def test_states_command_against_the_real_index():
+    from bot.formatting import render
+
+    idx = RuleIndex.load()
+    r = idx.search("states")
+    names = [e["name"] for e in r.suggestions]
+    assert r.kind == "list"
+    assert names == sorted(["Cursed", "Fragile", "Frozen", "Insubstantial",
+                            "Invulnerable", "Stopped", "Stunned", "Suppressed"])
+
+    embed = render(r, idx.rulebook)
+    assert embed.title == "States (8)"
+    for n in names:
+        assert n in embed.description
+    assert "Custom States" in embed.description          # see-also kept
+    assert "States Defined, p.31" in embed.footer.text   # shared citation

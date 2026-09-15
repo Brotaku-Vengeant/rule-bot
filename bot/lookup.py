@@ -21,6 +21,15 @@ FUZZY_ACCEPT = 88.0
 FUZZY_SUGGEST = 65.0
 AMBIGUITY_BAND = 4.0  # runners-up within this much of the top score tie it
 
+# List commands: a query that names a whole category returns every entry in it
+# rather than a single definition. Checked before term matching, so the word
+# can't fuzzy-match something else ("states" used to land on the Dor Un
+# Avathar's "Custom States"). Each maps to (category, display title, related
+# entries worth pointing at).
+LIST_COMMANDS = {
+    "states": ("state", "States", ("Custom States",)),
+}
+
 
 def normalize(text: str) -> str:
     """Lowercase, strip punctuation/possessives, collapse whitespace."""
@@ -49,13 +58,18 @@ def singular_forms(text: str) -> list[str]:
 @dataclass
 class Result:
     """Outcome of one lookup."""
-    kind: str                       # exact | fuzzy | ambiguous | miss
+    kind: str                       # exact | fuzzy | ambiguous | miss | list
     entry: dict | None = None
     suggestions: list[dict] = field(default_factory=list)
     query: str = ""
+    title: str = ""                 # list results: the category's display name
+    related: list[dict] = field(default_factory=list)   # list results: see-also
 
     def describe(self) -> str:
         """Plain-text rendering, used by the CLI and tests."""
+        if self.kind == "list":
+            names = ", ".join(e["name"] for e in self.suggestions)
+            return f"{self.title} ({len(self.suggestions)}): {names}"
         if self.kind in ("exact", "fuzzy"):
             e = self.entry
             # Only the rulebook has printed pages; the Dor Un Avathar is a
@@ -128,6 +142,16 @@ class RuleIndex:
         q = normalize(query)
         if not q:
             return Result(kind="miss", query=query)
+
+        # 0. List commands name a whole category, e.g. [[states]].
+        if q in LIST_COMMANDS:
+            category, title, related_names = LIST_COMMANDS[q]
+            members = sorted((e for e in self.entries if e["category"] == category),
+                             key=lambda e: e["name"])
+            related = [self._by_key[normalize(n)] for n in related_names
+                       if normalize(n) in self._by_key]
+            return Result(kind="list", suggestions=members, query=query,
+                          title=title, related=related)
 
         # 1-2. Exact, then singular/plural candidates.
         for candidate in (q, *singular_forms(q)):
