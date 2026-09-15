@@ -28,6 +28,7 @@ AMBIGUITY_BAND = 4.0  # runners-up within this much of the top score tie it
 # entries worth pointing at).
 LIST_COMMANDS = {
     "states": ("state", "States", ("Custom States",)),
+    "declarations": ("declaration", "Declarations", ()),
 }
 
 

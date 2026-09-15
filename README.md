@@ -130,6 +130,8 @@ found. Both are re-runnable when a new rulebook version comes out.
 | `[[flurbo]]` | **No Terms Found**, with nearest-term suggestions |
 | `[[beastfolk]]` | Monster stat block from the *Dor Un Avathar XI* |
 | `[[states]]` | Lists every State (Cursed, Frozen, Insubstantial…) |
+| `[[upon engagement]]` | The definition, plus what you must declare (from Declarations Made Easy) |
+| `[[declarations]]` | Lists the three Declaration categories |
 | `/rule` | Slash command with autocomplete over all 439 terms |
 
 At most 5 `[[lookups]]` per message are answered, to keep spam impossible.

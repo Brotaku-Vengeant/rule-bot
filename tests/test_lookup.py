@@ -520,3 +520,40 @@ def test_states_command_against_the_real_index():
         assert n in embed.description
     assert "Custom States" in embed.description          # see-also kept
     assert "States Defined, p.31" in embed.footer.text   # shared citation
+
+
+# --- Declarations Made Easy ---
+
+@real
+def test_upon_engagement_lists_what_must_be_declared():
+    idx = RuleIndex.load()
+    r = idx.search("Upon Enagement")          # misspelled, as it gets typed
+    assert r.entry["name"] == "Upon Engagement"
+    assert [(i["level"], i["text"]) for i in r.entry["declares"]] == [
+        (0, "Dead or Invulnerable"),
+        (0, "Posting or Hobbling"),
+        (0, "Special Effects on melee attacks"),
+        (0, "Enchantments or a summary of their effects"),
+        (1, "Whether the enchantment is Persistent"),
+        (1, "Choices made at the time of casting, such as weapons or shields for Harden"),
+        (1, "You are not required to share the number of uses remaining on multi-use enchantments"),
+        (0, "Presence of Magic Armor"),
+    ]
+    assert "Declared Upon Engagement" in r.entry["text"]
+
+
+@real
+def test_all_three_declaration_columns_are_attached():
+    idx = RuleIndex.load()
+    by = {e["name"]: e for e in idx.entries}
+    request = [(i["level"], i["text"]) for i in by["Upon Request"]["declares"]]
+    assert request[0] == (0, "Your name, class, and which team you are on")
+    assert (1, "Which Monster you're playing or Archetype you have purchased") in request
+    interaction = [(i["level"], i["text"]) for i in by["Upon Interaction"]["declares"]]
+    assert interaction[0] == (0, "Calling dead or alive")
+    assert (1, "hand on weapon") in interaction
+
+    r = idx.search("declarations")
+    assert r.kind == "list"
+    assert [e["name"] for e in r.suggestions] == [
+        "Upon Engagement", "Upon Interaction", "Upon Request"]

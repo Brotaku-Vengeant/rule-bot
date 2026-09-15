@@ -318,10 +318,12 @@ CANONICAL_SUBSECTIONS = {
 def crop_above_made_easy(page):
     """Drop everything from the '<X> Made Easy' box downward.
 
-    Made Easy boxes are the rulebook's own summaries, explicitly not the rules
-    text, and their multi-column tables also defeat two-column gutter
-    detection, interleaving the definitions above them. Cropping at the box
-    header fixes both.
+    Made Easy boxes are the rulebook's own summaries of a section (it says they
+    "highlight the most important concepts"), and their multi-column tables
+    defeat two-column gutter detection, interleaving the definitions above
+    them. Cropping at the box header fixes that. Where a box carries
+    information the prose does not - Declarations Made Easy - it is parsed on
+    its own; see parse_declarations_made_easy.
     """
     words = page.extract_words(extra_attrs=["fontname", "size"])
     headers = [w for w in words
@@ -634,6 +636,116 @@ def parse_spell_tables(pdf) -> dict[str, list[dict]]:
                 })
             page.flush_cache()
     return purchases, raw_rows
+
+
+# "Declarations Made Easy" (printed p.33): three bulleted columns listing what
+# each Declaration category covers. The prose definitions above it say what the
+# categories MEAN; only this table says what goes in them, so it is attached to
+# those entries instead of being cropped away with the other Made Easy boxes.
+DECLARATIONS_PAGE = 35                       # PDF page; printed 33
+DECLARATION_COLUMNS = ("Upon Engagement", "Upon Request", "Upon Interaction")
+BULLET = "•"
+
+
+def parse_declarations_made_easy(pdf) -> dict[str, list[dict]]:
+    """Read the Declarations Made Easy table into nested bullet lists.
+
+    The item text is 8pt MinionPro-Regular - the face keep_obj drops to shed
+    diagram callout labels - so this reads the page with only rotated sidebar
+    text removed. Columns come from the bullet glyphs themselves: each column
+    has a main bullet position and a second one indented for sub-items, and a
+    word belongs to the rightmost column whose main bullet it has reached.
+
+    Every item is then checked, ignoring whitespace only, against a crop of its
+    own column, and the build fails on any mismatch or missing column.
+    """
+    import difflib
+
+    page = pdf.pages[DECLARATIONS_PAGE - 1].filter(lambda o: o.get("upright", True))
+    words = page.extract_words(extra_attrs=["fontname", "size"], x_tolerance=1.5)
+
+    easy = [w for w in words if "TrajanPro-Bold" in w["fontname"] and w["text"] == "Easy"]
+    if not easy:
+        raise SystemExit("Declarations Made Easy header not found on its page")
+    table_top = min(w["top"] for w in easy)
+
+    # Column headers: bold 8pt, one "Upon ..." phrase per column.
+    heads: list[list] = []
+    for w in sorted((w for w in words if w["top"] > table_top
+                     and "Bold" in w["fontname"] and abs(w["size"] - 8.0) < 0.6),
+                    key=lambda w: w["x0"]):
+        if w["text"] == "Upon" or not heads:
+            heads.append([w])
+        else:
+            heads[-1].append(w)
+    head_names = [clean(" ".join(w["text"] for w in h)) for h in heads]
+    # The printed header reads "Upon Interacton" - a typo in the book - so the
+    # columns are matched by similarity, not exact text.
+    if len(heads) != 3 or any(
+            difflib.SequenceMatcher(None, got.lower(), want.lower()).ratio() < 0.85
+            for got, want in zip(head_names, DECLARATION_COLUMNS)):
+        raise SystemExit(f"Unexpected Declarations Made Easy headers: {head_names}")
+    head_x = [h[0]["x0"] for h in heads]
+    head_bottom = max(w["bottom"] for h in heads for w in h)
+
+    body = [w for w in words if w["top"] > head_bottom and "Trajan" not in w["fontname"]]
+    bullets = [w for w in body if w["text"] == BULLET]
+    col_bullets: list[list[float]] = [[], [], []]
+    for b in bullets:
+        col_bullets[sum(1 for x in head_x if x < b["x0"])].append(b["x0"])
+    if not all(col_bullets):
+        raise SystemExit("A Declarations Made Easy column has no bullets")
+    col_left = [min(xs) for xs in col_bullets]
+
+    def column_of(x0: float) -> int:
+        return max(i for i, left in enumerate(col_left) if x0 + 3 >= left) \
+            if x0 + 3 >= col_left[0] else 0
+
+    declared: dict[str, list[dict]] = {}
+    for ci, name in enumerate(DECLARATION_COLUMNS):
+        cwords = sorted((w for w in body if column_of(w["x0"]) == ci),
+                        key=lambda w: (w["top"], w["x0"]))
+        # Group into printed lines; bullets sit about a point above their text.
+        lines: list[list] = []
+        for w in cwords:
+            if lines and w["top"] - lines[-1][0]["top"] <= 2.5:
+                lines[-1].append(w)
+            else:
+                lines.append([w])
+
+        items: list[dict] = []
+        for line in lines:
+            line.sort(key=lambda w: w["x0"])
+            if line[0]["text"] == BULLET:
+                level = 0 if abs(line[0]["x0"] - col_left[ci]) < 3 else 1
+                items.append({"level": level, "parts": []})
+                line = line[1:]
+            if not items or not line:
+                continue
+            items[-1]["parts"].append(" ".join(w["text"] for w in line))
+
+        for it in items:
+            text = ""
+            for part in it["parts"]:
+                # Keep a printed line-end hyphen and join without a space
+                # ("multi-" + "use"), exactly as the characters appear.
+                text = text + part if text.endswith("-") else f"{text} {part}"
+            it["text"] = clean(text).strip()
+            del it["parts"]
+        if not items:
+            raise SystemExit(f"No Declarations Made Easy items parsed for {name}")
+
+        # Verbatim check against the column's own crop of the page.
+        right = col_left[ci + 1] - 1 if ci + 1 < len(col_left) else page.bbox[2]
+        crop = page.crop((col_left[ci] - 1, head_bottom, right, page.bbox[3]))
+        haystack = re.sub(r"\s+", "", clean(crop.extract_text() or ""))
+        bad = [it["text"] for it in items
+               if re.sub(r"\s+", "", it["text"]) not in haystack]
+        if bad:
+            raise SystemExit(f"Declarations Made Easy items not verbatim in {name}: {bad}")
+        declared[name] = items
+
+    return declared
 
 
 def cross_check_spell_tables(entries: list[dict], raw_rows: list[dict]) -> list[str]:
@@ -1025,6 +1137,7 @@ def build(pdf_path: Path) -> dict:
         # which is the wrong place to answer "what does this cost me?" - so it
         # is attached to each ability instead.
         purchases, spell_rows = parse_spell_tables(pdf)
+        declared = parse_declarations_made_easy(pdf)
 
     problems = cross_check_spell_tables(entries, spell_rows)
     if problems:
@@ -1049,6 +1162,18 @@ def build(pdf_path: Path) -> dict:
             f"{unmatched}\nThe glossary and the purchase tables disagree; "
             "fix the parse rather than dropping the rows."
         )
+
+    # What each Declaration category covers, from Declarations Made Easy.
+    by_name = {e["name"]: e for e in entries}
+    for name, items in declared.items():
+        e = by_name.get(name)
+        if e is None or e["category"] != "declaration":
+            raise SystemExit(
+                f"Declarations Made Easy column {name!r} has no declaration entry")
+        e["declares"] = items
+        bullets = "\n".join(("  " * it["level"]) + "- " + it["text"] for it in items)
+        e["text"] = (f"{e['text']}\n\n**Declared {name}** "
+                     f"(Declarations Made Easy):\n{bullets}")
 
     # The rulebook prints ladder awards as bare run-in headings ("Warrior:")
     # but refers to them throughout as "Order of the Warrior". Storing the bare
