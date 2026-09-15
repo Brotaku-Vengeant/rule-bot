@@ -135,6 +135,7 @@ found. Both are re-runnable when a new rulebook version comes out.
 | `[[schools]]` · `[[special effects]]` | Lists every magic School / every Special Effect |
 | `[[classes]]` | Lists every class, including Color, Monster and Peasant |
 | `[[monsters]]` | Lists all 54 Dor Un Avathar monsters, grouped by tier |
+| `[[magic items]]` · `[[relics]]` | Lists all 29 magic items, grouped as Trinkets, Talismans and Artifacts |
 | `/rule` | Slash command with autocomplete over all 439 terms |
 
 At most 5 `[[lookups]]` per message are answered, to keep spam impossible.

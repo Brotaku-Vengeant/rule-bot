@@ -40,6 +40,12 @@ LIST_COMMANDS = {
     # Plural only: [[monster]] stays the rulebook's Monster class, which the
     # plural used to reach and which is kept as the see-also.
     "monsters": ("monster", "Monsters", ("Monster",)),
+    # Three categories, grouped by the book's own sections. The rulebook says
+    # "Magic Items, or Relics, fall into one of three categories" - Trinkets,
+    # Talismans, Artifacts - so "relics" is the same list, not a fourth type.
+    "magic items": (("trinket", "talisman", "artifact"), "Magic Items", ()),
+    "magic item": (("trinket", "talisman", "artifact"), "Magic Items", ()),
+    "relics": (("trinket", "talisman", "artifact"), "Magic Items", ()),
 }
 
 
@@ -158,12 +164,14 @@ class RuleIndex:
         # 0. List commands name a whole category, e.g. [[states]].
         if q in LIST_COMMANDS:
             category, title, related_names = LIST_COMMANDS[q]
+            # A command names one category or several (magic items span three).
+            categories = (category,) if isinstance(category, str) else category
             # Sections keep book order (so monster tiers run 1 to 4), names are
             # alphabetical within each. A single-section list is plain A-Z.
             section_rank: dict[str, int] = {}
             for e in self.entries:
                 section_rank.setdefault(e.get("section") or "", len(section_rank))
-            members = sorted((e for e in self.entries if e["category"] == category),
+            members = sorted((e for e in self.entries if e["category"] in categories),
                              key=lambda e: (section_rank[e.get("section") or ""],
                                             e["name"]))
             related = [self._by_key[normalize(n)] for n in related_names

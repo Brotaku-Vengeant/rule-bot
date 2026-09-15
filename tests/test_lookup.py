@@ -653,3 +653,34 @@ def test_single_section_lists_are_not_grouped():
     idx = RuleIndex.load()
     for q in ("states", "schools", "special effects", "declarations", "classes"):
         assert "__" not in render(idx.search(q), idx.rulebook).description, q
+
+
+@real
+def test_magic_items_list_groups_by_type():
+    from bot.formatting import render
+
+    idx = RuleIndex.load()
+    r = idx.search("magic items")
+    assert r.kind == "list"
+    assert len(r.suggestions) == 29
+
+    groups = []
+    for e in r.suggestions:
+        if not groups or groups[-1][0] != e["section"]:
+            groups.append((e["section"], []))
+        groups[-1][1].append(e["name"])
+    # The book's own three types, in book order, A-Z within each.
+    assert [g for g, _ in groups] == ["Trinkets", "Talismans", "Artifacts"]
+    assert [len(n) for _, n in groups] == [10, 10, 9]
+    assert all(n == sorted(n) for _, n in groups)
+
+    # "Relics" is the book's synonym for Magic Items, not a fourth type.
+    for alias in ("magic item", "relics", "Magic Items"):
+        assert [e["name"] for e in idx.search(alias).suggestions] == \
+               [e["name"] for e in r.suggestions], alias
+
+    embed = render(r, idx.rulebook)
+    assert embed.title == "Magic Items (29)"
+    d = embed.description
+    assert d.index("__Trinkets__") < d.index("__Talismans__") < d.index("__Artifacts__")
+    assert embed.footer.text == 'Amtgard v8.08 "Spongy", pp.76-78'

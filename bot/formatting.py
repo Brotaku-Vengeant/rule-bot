@@ -212,7 +212,15 @@ def list_embed(result: Result, rulebook: str) -> discord.Embed:
                      else f", pp.{pages[0]}-{pages[-1]}")
         embed.set_footer(text=cite)
     elif entries:
-        embed.set_footer(text=" / ".join(sorted({p[0] for p in places})))
+        books = sorted({p[0] for p in places})
+        cite = " / ".join(books)
+        # Several sections of one paginated book (Trinkets, Talismans and
+        # Artifacts run pp.76-78): cite the span. A book without printed
+        # pages, like the Dor Un Avathar, keeps just its name.
+        if len(books) == 1 and pages:
+            cite += (f", p.{pages[0]}" if pages[0] == pages[-1]
+                     else f", pp.{pages[0]}-{pages[-1]}")
+        embed.set_footer(text=cite)
     return embed
 
 
