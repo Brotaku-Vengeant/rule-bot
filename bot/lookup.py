@@ -34,6 +34,9 @@ LIST_COMMANDS = {
     "schools": ("school", "Schools", ("School",)),
     "special effects": ("special effect", "Special Effects", ()),
     "special effect": ("special effect", "Special Effects", ()),
+    # Both forms: "class" alone was ambiguous between two class-rule entries.
+    "classes": ("class", "Classes", ("Credits and Levels", "Portraying A Class")),
+    "class": ("class", "Classes", ("Credits and Levels", "Portraying A Class")),
 }
 
 

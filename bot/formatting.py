@@ -187,9 +187,17 @@ def list_embed(result: Result, rulebook: str) -> discord.Embed:
     # rulebook's States all do (States Defined, one page).
     places = {(e.get("source") or rulebook, e.get("section"), e.get("page"))
               for e in entries}
-    if len(places) == 1:
-        book, section, page = places.pop()
-        embed.set_footer(text=f"{book} - {section}" + (f", p.{page}" if page else ""))
+    shelves = {(book, section) for book, section, _ in places}
+    pages = sorted(p for _, _, p in places if p)
+    if len(shelves) == 1 and entries:
+        # One book and section: cite its page, or its page span when the
+        # entries sit on several pages (the Classes run pp.35-58).
+        book, section = shelves.pop()
+        cite = f"{book} - {section}"
+        if pages:
+            cite += (f", p.{pages[0]}" if pages[0] == pages[-1]
+                     else f", pp.{pages[0]}-{pages[-1]}")
+        embed.set_footer(text=cite)
     elif entries:
         embed.set_footer(text=" / ".join(sorted({p[0] for p in places})))
     return embed

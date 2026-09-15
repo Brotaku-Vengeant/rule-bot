@@ -586,3 +586,26 @@ def test_schools_and_special_effects_list_commands():
     embed = render(effects, idx.rulebook)
     assert embed.title == "Special Effects (8)"
     assert "Special Effects Defined, p.32" in embed.footer.text
+
+
+@real
+def test_classes_list_command():
+    from bot.formatting import render
+
+    idx = RuleIndex.load()
+    r = idx.search("classes")
+    assert r.kind == "list"
+    assert [e["name"] for e in r.suggestions] == [
+        "Anti-Paladin", "Archer", "Assassin", "Barbarian", "Bard", "Color",
+        "Druid", "Healer", "Monk", "Monster", "Paladin", "Peasant", "Scout",
+        "Warrior", "Wizard"]
+    assert [e["name"] for e in r.related] == ["Credits and Levels", "Portraying A Class"]
+    # The singular was ambiguous before; it now lists the classes too.
+    assert idx.search("class").kind == "list"
+    # A single class is still an ordinary lookup.
+    assert idx.search("warrior").entry["category"] == "class"
+
+    embed = render(r, idx.rulebook)
+    assert embed.title == "Classes (15)"
+    # Entries on many pages of one section cite the span.
+    assert embed.footer.text.endswith("Classes, pp.35-58")
