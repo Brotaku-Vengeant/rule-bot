@@ -609,3 +609,47 @@ def test_classes_list_command():
     assert embed.title == "Classes (15)"
     # Entries on many pages of one section cite the span.
     assert embed.footer.text.endswith("Classes, pp.35-58")
+
+
+@real
+def test_monsters_list_command_groups_by_tier():
+    from bot.formatting import embed_cost, render
+
+    idx = RuleIndex.load()
+    r = idx.search("monsters")
+    assert r.kind == "list"
+    assert len(r.suggestions) == 54
+    assert [e["name"] for e in r.related] == ["Monster"]
+    # The singular is still the rulebook's Monster class.
+    single = idx.search("monster").entry
+    assert single["name"] == "Monster" and single["category"] == "class"
+
+    # Tiers in book order, names alphabetical within each tier.
+    tiers = []
+    for e in r.suggestions:
+        if not tiers or tiers[-1][0] != e["section"]:
+            tiers.append((e["section"], []))
+        tiers[-1][1].append(e["name"])
+    assert [t for t, _ in tiers] == [
+        "Standard Monsters (Tier 1)", "Advanced Monsters (Tier 2)",
+        "Scenario Monsters (Tier 3)", "Legendary Monsters (Tier 4)"]
+    assert [len(n) for _, n in tiers] == [8, 30, 12, 4]
+    assert all(n == sorted(n) for _, n in tiers)
+    assert tiers[3][1] == ["Dragon", "Hydra/Kraken", "Lich", "Phoenix"]
+
+    embed = render(r, idx.rulebook)
+    assert embed.title == "Monsters (54)"
+    d = embed.description
+    assert d.index("Standard Monsters (Tier 1)") < d.index("Advanced Monsters (Tier 2)") \
+        < d.index("Scenario Monsters (Tier 3)") < d.index("Legendary Monsters (Tier 4)")
+    assert embed.footer.text == "Dor Un Avathar XI"
+    assert embed_cost(embed) <= 6000
+
+
+@real
+def test_single_section_lists_are_not_grouped():
+    from bot.formatting import render
+
+    idx = RuleIndex.load()
+    for q in ("states", "schools", "special effects", "declarations", "classes"):
+        assert "__" not in render(idx.search(q), idx.rulebook).description, q

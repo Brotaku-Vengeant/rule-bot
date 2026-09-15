@@ -169,7 +169,20 @@ def fit_embeds(embeds: list[discord.Embed],
 def list_embed(result: Result, rulebook: str) -> discord.Embed:
     """Every entry in a category, e.g. [[states]]."""
     entries = result.suggestions
-    lines = [f"- **{e['name']}**" for e in entries]
+    # When a category spans several sections - the Dor Un Avathar's four
+    # monster tiers - group under a header per section. Entries arrive ordered
+    # by section, so a header goes in wherever the section changes.
+    grouped = len({e.get("section") for e in entries}) > 1
+    lines: list[str] = []
+    current = object()
+    for e in entries:
+        if grouped and e.get("section") != current:
+            current = e.get("section")
+            count = sum(1 for x in entries if x.get("section") == current)
+            if lines:
+                lines.append("")
+            lines.append(f"__{current}__ ({count})")
+        lines.append(f"- **{e['name']}**")
     if result.related:
         lines.append("")
         lines.append("See also: " + ", ".join(f"**{e['name']}** ({e.get('source') or rulebook})"

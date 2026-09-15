@@ -37,6 +37,9 @@ LIST_COMMANDS = {
     # Both forms: "class" alone was ambiguous between two class-rule entries.
     "classes": ("class", "Classes", ("Credits and Levels", "Portraying A Class")),
     "class": ("class", "Classes", ("Credits and Levels", "Portraying A Class")),
+    # Plural only: [[monster]] stays the rulebook's Monster class, which the
+    # plural used to reach and which is kept as the see-also.
+    "monsters": ("monster", "Monsters", ("Monster",)),
 }
 
 
@@ -155,8 +158,14 @@ class RuleIndex:
         # 0. List commands name a whole category, e.g. [[states]].
         if q in LIST_COMMANDS:
             category, title, related_names = LIST_COMMANDS[q]
+            # Sections keep book order (so monster tiers run 1 to 4), names are
+            # alphabetical within each. A single-section list is plain A-Z.
+            section_rank: dict[str, int] = {}
+            for e in self.entries:
+                section_rank.setdefault(e.get("section") or "", len(section_rank))
             members = sorted((e for e in self.entries if e["category"] == category),
-                             key=lambda e: e["name"])
+                             key=lambda e: (section_rank[e.get("section") or ""],
+                                            e["name"]))
             related = [self._by_key[normalize(n)] for n in related_names
                        if normalize(n) in self._by_key]
             return Result(kind="list", suggestions=members, query=query,
