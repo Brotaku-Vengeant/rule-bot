@@ -1000,10 +1000,17 @@ def build(pdf_path: Path) -> dict:
                 else:
                     page_rows = ordered_rows(page)
 
+                # Tracks the heading line just seen, so a heading printed across
+                # two lines can be rejoined (see the subsection branch below).
+                prev_heading = None
+                prev_heading_text = ""
+
                 for row in page_rows:
                     if spec.get("tolerant_columns"):
                         row = strip_hanging_marker(row)
                     first = row[0]
+                    if not ("TrajanPro-Bold" in first["fontname"] and first["size"] > 12):
+                        prev_heading = None
 
                     # Subsection header, e.g. "States Defined".
                     if "TrajanPro-Bold" in first["fontname"] and first["size"] > 12:
@@ -1034,6 +1041,21 @@ def build(pdf_path: Path) -> dict:
                             # usable as labels; the section name is fixed.
                             continue
                         raw_name = clean(" ".join(w["text"] for w in row))
+                        # A heading can wrap onto a second printed line ("Magic
+                        # and Ability" / "Mechanics Defined"). Each line arrives
+                        # as its own row, and the second used to replace the
+                        # first, truncating 36 citations. Rejoin a heading line
+                        # set directly under the previous one at the same size
+                        # and indent.
+                        if (prev_heading is not None
+                                and abs(first["size"] - prev_heading["size"]) < 0.6
+                                and abs(first["x0"] - prev_heading["x0"]) < 3
+                                and first["top"] - prev_heading["bottom"]
+                                < first["size"] * 1.5):
+                            raw_name = f"{prev_heading_text} {raw_name}"
+                        prev_heading = {"size": first["size"], "x0": first["x0"],
+                                        "bottom": max(w["bottom"] for w in row)}
+                        prev_heading_text = raw_name
                         subsection = CANONICAL_SUBSECTIONS.get(
                             squash(raw_name), raw_name)
                         continue

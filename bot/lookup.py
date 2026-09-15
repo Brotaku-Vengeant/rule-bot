@@ -29,6 +29,11 @@ AMBIGUITY_BAND = 4.0  # runners-up within this much of the top score tie it
 LIST_COMMANDS = {
     "states": ("state", "States", ("Custom States",)),
     "declarations": ("declaration", "Declarations", ()),
+    # "schools" used to reach the School definition by plural matching; that
+    # stays one lookup away as [[school]] and as the see-also.
+    "schools": ("school", "Schools", ("School",)),
+    "special effects": ("special effect", "Special Effects", ()),
+    "special effect": ("special effect", "Special Effects", ()),
 }
 
 

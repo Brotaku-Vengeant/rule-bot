@@ -557,3 +557,32 @@ def test_all_three_declaration_columns_are_attached():
     assert r.kind == "list"
     assert [e["name"] for e in r.suggestions] == [
         "Upon Engagement", "Upon Interaction", "Upon Request"]
+
+
+@real
+def test_schools_and_special_effects_list_commands():
+    from bot.formatting import render
+
+    idx = RuleIndex.load()
+
+    schools = idx.search("schools")
+    assert schools.kind == "list"
+    assert [e["name"] for e in schools.suggestions] == [
+        "Command", "Death", "Flame", "Neutral",
+        "Protection", "Sorcery", "Spirit", "Subdual"]
+    assert [e["name"] for e in schools.related] == ["School"]
+    # The heading is printed on two lines; the citation must carry all of it.
+    assert "Magic and Ability Mechanics Defined, p.30" in render(schools, idx.rulebook).footer.text
+    # The singular still reaches the definition the plural used to.
+    assert idx.search("school").entry["name"] == "School"
+
+    effects = idx.search("Special Effects")
+    assert effects.kind == "list"
+    assert [e["name"] for e in effects.suggestions] == [
+        "Armor Breaking", "Armor Destroying", "Phasing", "Shield Crushing",
+        "Shield Destroying", "Siege", "Weapon Destroying", "Wounds Kill"]
+    assert idx.search("special effect").kind == "list"
+
+    embed = render(effects, idx.rulebook)
+    assert embed.title == "Special Effects (8)"
+    assert "Special Effects Defined, p.32" in embed.footer.text
