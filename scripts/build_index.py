@@ -228,6 +228,12 @@ PROSE_CLASSES = {"Color", "Monster", "Peasant"}
 QUALIFY_CHILDREN = {"Resistant"}
 CHILD_CATEGORY = {"School": "school"}
 
+# Entries printed inside a section they do not belong to. Heavy Padding
+# Substitution opens the Melee Weapon Types section, but it is a construction
+# allowance ("allows you to replace a portion of Strike-Legal with Heavy
+# Padding"), not a weapon you can wield.
+CATEGORY_OVERRIDES = {"Heavy Padding Substitution": "weapon modifier"}
+
 # Verbatim repairs for extraction artifacts that no ordering heuristic can fix.
 # Each is (entry name, wrong text, correct text per the printed book); the
 # build FAILS if a pattern stops matching, forcing a review on the next
@@ -1196,6 +1202,11 @@ def build(pdf_path: Path) -> dict:
         bullets = "\n".join(("  " * it["level"]) + "- " + it["text"] for it in items)
         e["text"] = (f"{e['text']}\n\n**Declared {name}** "
                      f"(Declarations Made Easy):\n{bullets}")
+
+    for e in entries:
+        override = CATEGORY_OVERRIDES.get(e["name"])
+        if override:
+            e["category"] = override
 
     # The rulebook prints ladder awards as bare run-in headings ("Warrior:")
     # but refers to them throughout as "Order of the Warrior". Storing the bare

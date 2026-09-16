@@ -58,9 +58,11 @@ LIST_COMMANDS = {
     # safety rules and arrow components are not weapons, so they stay separate
     # lookups and are pointed at instead.
     "weapons": (("weapon", "projectile"), "Weapons",
-                ("Weapon Safety", "Shields", "Bows", "Siege Weapons", "Arrows")),
+                ("Heavy Padding Substitution", "Weapon Safety", "Shields",
+                 "Bows", "Siege Weapons", "Arrows")),
     "weapon": (("weapon", "projectile"), "Weapons",
-               ("Weapon Safety", "Shields", "Bows", "Siege Weapons", "Arrows")),
+               ("Heavy Padding Substitution", "Weapon Safety", "Shields",
+                "Bows", "Siege Weapons", "Arrows")),
 }
 
 

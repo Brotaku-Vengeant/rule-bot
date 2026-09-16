@@ -25,6 +25,7 @@ CATEGORY_COLORS = {
     "shield": discord.Colour.dark_blue(),
     "projectile": discord.Colour.dark_green(),
     "armor modifier": discord.Colour.light_grey(),
+    "weapon modifier": discord.Colour.dark_gold(),
     "weapon rule": discord.Colour.dark_magenta(),
     "arrow": discord.Colour.dark_teal(),
     "equipment rule": discord.Colour.greyple(),

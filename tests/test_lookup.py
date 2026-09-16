@@ -727,7 +727,7 @@ def test_weapons_list_command():
     idx = RuleIndex.load()
     r = idx.search("weapons")
     assert r.kind == "list"
-    assert len(r.suggestions) == 14
+    assert len(r.suggestions) == 13
 
     groups = []
     for e in r.suggestions:
@@ -735,12 +735,13 @@ def test_weapons_list_command():
             groups.append((e["section"], []))
         groups[-1][1].append(e["name"])
     assert [g for g, _ in groups] == ["Melee Weapon Types", "Projectiles"]
-    assert [len(n) for _, n in groups] == [8, 6]
+    assert [len(n) for _, n in groups] == [7, 6]
     assert all(n == sorted(n) for _, n in groups)
     assert "Dagger" in groups[0][1] and "Javelins" in groups[1][1]
 
     assert [e["name"] for e in r.related] == [
-        "Weapon Safety", "Shields", "Bows", "Siege Weapons", "Arrows"]
+        "Heavy Padding Substitution", "Weapon Safety", "Shields",
+        "Bows", "Siege Weapons", "Arrows"]
     assert idx.search("weapon").kind == "list"
 
     # Construction terms and safety rules stay their own lookups, not weapons.
@@ -748,8 +749,15 @@ def test_weapons_list_command():
     assert idx.search("the ring rule").entry["category"] == "weapon rule"
     assert idx.search("dagger").entry["category"] == "weapon"
 
+    # Printed in the Melee Weapon Types section, but it is an allowance for
+    # building a weapon rather than a weapon, so it is not listed as one.
+    hps = idx.search("heavy padding substitution").entry
+    assert hps["category"] == "weapon modifier"
+    assert hps["section"] == "Melee Weapon Types"      # cited where it prints
+    assert "Heavy Padding Substitution" not in [e["name"] for e in r.suggestions]
+
     embed = render(r, idx.rulebook)
-    assert embed.title == "Weapons (14)"
+    assert embed.title == "Weapons (13)"
     assert embed.footer.text == 'Amtgard v8.08 "Spongy", pp.14-16'
 
 
