@@ -54,6 +54,13 @@ LIST_COMMANDS = {
                ("Armor Combat Rules", "Armor Types and Modifiers", "Magic Armor")),
     "armour": (("armor", "armor modifier"), "Armor",
                ("Armor Combat Rules", "Armor Types and Modifiers", "Magic Armor")),
+    # What you wield or throw. Construction terms (Core, Strike-Legal), the
+    # safety rules and arrow components are not weapons, so they stay separate
+    # lookups and are pointed at instead.
+    "weapons": (("weapon", "projectile"), "Weapons",
+                ("Weapon Safety", "Shields", "Bows", "Siege Weapons", "Arrows")),
+    "weapon": (("weapon", "projectile"), "Weapons",
+               ("Weapon Safety", "Shields", "Bows", "Siege Weapons", "Arrows")),
 }
 
 

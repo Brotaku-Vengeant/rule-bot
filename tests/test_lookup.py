@@ -718,3 +718,50 @@ def test_armor_list_groups_modifiers_before_types():
     embed = render(r, idx.rulebook)
     assert embed.title == "Armor (15)"
     assert embed.footer.text == 'Amtgard v8.08 "Spongy", pp.11-12'
+
+
+@real
+def test_weapons_list_command():
+    from bot.formatting import render
+
+    idx = RuleIndex.load()
+    r = idx.search("weapons")
+    assert r.kind == "list"
+    assert len(r.suggestions) == 14
+
+    groups = []
+    for e in r.suggestions:
+        if not groups or groups[-1][0] != e["section"]:
+            groups.append((e["section"], []))
+        groups[-1][1].append(e["name"])
+    assert [g for g, _ in groups] == ["Melee Weapon Types", "Projectiles"]
+    assert [len(n) for _, n in groups] == [8, 6]
+    assert all(n == sorted(n) for _, n in groups)
+    assert "Dagger" in groups[0][1] and "Javelins" in groups[1][1]
+
+    assert [e["name"] for e in r.related] == [
+        "Weapon Safety", "Shields", "Bows", "Siege Weapons", "Arrows"]
+    assert idx.search("weapon").kind == "list"
+
+    # Construction terms and safety rules stay their own lookups, not weapons.
+    assert idx.search("strike-legal").entry["category"] == "weapon term"
+    assert idx.search("the ring rule").entry["category"] == "weapon rule"
+    assert idx.search("dagger").entry["category"] == "weapon"
+
+    embed = render(r, idx.rulebook)
+    assert embed.title == "Weapons (14)"
+    assert embed.footer.text == 'Amtgard v8.08 "Spongy", pp.14-16'
+
+
+@real
+def test_see_also_names_the_book_only_when_it_differs():
+    from bot.formatting import render
+
+    idx = RuleIndex.load()
+    # Same book: no source in parentheses.
+    weapons = render(idx.search("weapons"), idx.rulebook).description
+    assert "**Weapon Safety**," in weapons
+    assert 'Weapon Safety** (Amtgard' not in weapons
+    # Different book: the source is kept.
+    states = render(idx.search("states"), idx.rulebook).description
+    assert "**Custom States** (Dor Un Avathar XI)" in states

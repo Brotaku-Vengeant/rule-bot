@@ -184,9 +184,16 @@ def list_embed(result: Result, rulebook: str) -> discord.Embed:
             lines.append(f"__{current}__ ({count})")
         lines.append(f"- **{e['name']}**")
     if result.related:
+        # Name the book only when a see-also comes from a different one than
+        # the list itself, e.g. Custom States under the rulebook's States.
+        books = {e.get("source") or rulebook for e in entries}
+        parts = []
+        for e in result.related:
+            source = e.get("source") or rulebook
+            parts.append(f"**{e['name']}**"
+                         + (f" ({source})" if source not in books else ""))
         lines.append("")
-        lines.append("See also: " + ", ".join(f"**{e['name']}** ({e.get('source') or rulebook})"
-                                             for e in result.related))
+        lines.append("See also: " + ", ".join(parts))
     lines.append("")
     lines.append("Type `[[name]]` for the full definition.")
 

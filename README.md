@@ -137,6 +137,7 @@ found. Both are re-runnable when a new rulebook version comes out.
 | `[[monsters]]` | Lists all 54 Dor Un Avathar monsters, grouped by tier |
 | `[[magic items]]` · `[[relics]]` | Lists all 29 magic items, grouped as Trinkets, Talismans and Artifacts |
 | `[[armor]]` | Lists the 11 armor types and the 4 modifiers that adjust their rating |
+| `[[weapons]]` | Lists the 8 melee weapon types and 6 projectiles |
 | `/rule` | Slash command with autocomplete over all 439 terms |
 
 At most 5 `[[lookups]]` per message are answered, to keep spam impossible.
