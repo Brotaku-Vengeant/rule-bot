@@ -26,6 +26,23 @@ AMBIGUITY_BAND = 4.0  # runners-up within this much of the top score tie it
 # can't fuzzy-match something else ("states" used to land on the Dor Un
 # Avathar's "Custom States"). Each maps to (category, display title, related
 # entries worth pointing at).
+# Commands whose members are not a whole category. Each group is
+# (label, rule); a label of "" renders without a header. A rule selects by
+# explicit entry names or by a field on the entry itself.
+GROUPED_COMMANDS = {
+    # A plain arrow is a real type the rulebook never names, so Standard
+    # points at the book's own Arrows entry rather than at invented text.
+    # The specialty arrows select on their own Type field, so a future
+    # edition's new one appears without editing this table.
+    "arrow types": (
+        "Arrow Types",
+        (("", {"names": ("Arrows",)}),
+         ("", {"field": ("Type", "Specialty Arrow")})),
+        # Not "Arrows" - it is the first item in the list itself.
+        ("Specialty Arrows", "Covers", "Bows"),
+    ),
+}
+
 LIST_COMMANDS = {
     "states": ("state", "States", ("Custom States",)),
     "declarations": ("declaration", "Declarations", ()),
@@ -99,6 +116,7 @@ class Result:
     query: str = ""
     title: str = ""                 # list results: the category's display name
     related: list[dict] = field(default_factory=list)   # list results: see-also
+    groups: list = field(default_factory=list)          # list: (label, entries)
 
     def describe(self) -> str:
         """Plain-text rendering, used by the CLI and tests."""
@@ -178,7 +196,33 @@ class RuleIndex:
         if not q:
             return Result(kind="miss", query=query)
 
-        # 0. List commands name a whole category, e.g. [[states]].
+        # 0a. Commands whose groups are not whole categories, e.g. [[arrow
+        #     types]]: a plain arrow is a real type the book never names, so
+        #     Standard points at the book's own Arrows entry rather than at
+        #     invented text, and Specialty selects on each entry's own Type
+        #     field - so a future edition's new specialty arrow is picked up
+        #     without editing this table.
+        if q in GROUPED_COMMANDS:
+            title, group_spec, related_names = GROUPED_COMMANDS[q]
+            groups = []
+            for label, rule in group_spec:
+                if "names" in rule:
+                    members = [self._by_key[normalize(n)] for n in rule["names"]
+                               if normalize(n) in self._by_key]
+                else:
+                    key, value = rule["field"]
+                    members = sorted(
+                        (e for e in self.entries
+                         if (e.get("fields") or {}).get(key) == value),
+                        key=lambda e: e["name"])
+                if members:
+                    groups.append((label, members))
+            return Result(kind="list", query=query, title=title, groups=groups,
+                          suggestions=[e for _, ms in groups for e in ms],
+                          related=[self._by_key[normalize(n)] for n in related_names
+                                   if normalize(n) in self._by_key])
+
+        # 0b. List commands name a whole category, e.g. [[states]].
         if q in LIST_COMMANDS:
             category, title, related_names = LIST_COMMANDS[q]
             # A command names one category or several (magic items span three).

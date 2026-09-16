@@ -173,17 +173,26 @@ def list_embed(result: Result, rulebook: str) -> discord.Embed:
     # When a category spans several sections - the Dor Un Avathar's four
     # monster tiers - group under a header per section. Entries arrive ordered
     # by section, so a header goes in wherever the section changes.
-    grouped = len({e.get("section") for e in entries}) > 1
     lines: list[str] = []
-    current = object()
-    for e in entries:
-        if grouped and e.get("section") != current:
-            current = e.get("section")
-            count = sum(1 for x in entries if x.get("section") == current)
-            if lines:
-                lines.append("")
-            lines.append(f"__{current}__ ({count})")
-        lines.append(f"- **{e['name']}**")
+    if result.groups:
+        # The command defined its own groups (Standard / Specialty arrows).
+        for label, members in result.groups:
+            if label:
+                if lines:
+                    lines.append("")
+                lines.append(f"__{label}__ ({len(members)})")
+            lines.extend(f"- **{e['name']}**" for e in members)
+    else:
+        grouped = len({e.get("section") for e in entries}) > 1
+        current = object()
+        for e in entries:
+            if grouped and e.get("section") != current:
+                current = e.get("section")
+                count = sum(1 for x in entries if x.get("section") == current)
+                if lines:
+                    lines.append("")
+                lines.append(f"__{current}__ ({count})")
+            lines.append(f"- **{e['name']}**")
     if result.related:
         # Name the book only when a see-also comes from a different one than
         # the list itself, e.g. Custom States under the rulebook's States.

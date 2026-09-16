@@ -773,3 +773,32 @@ def test_see_also_names_the_book_only_when_it_differs():
     # Different book: the source is kept.
     states = render(idx.search("states"), idx.rulebook).description
     assert "**Custom States** (Dor Un Avathar XI)" in states
+
+
+@real
+def test_arrow_types_list_command():
+    from bot.formatting import render
+
+    idx = RuleIndex.load()
+    r = idx.search("arrow types")
+    assert r.kind == "list"
+    # The plain arrow first, then every specialty arrow.
+    assert [e["name"] for e in r.suggestions] == [
+        "Arrows", "Destruction Arrow", "Phase Arrow", "Pinning Arrow",
+        "Poison Arrow", "Suppression Arrow"]
+    assert [e["name"] for e in r.related] == ["Specialty Arrows", "Covers", "Bows"]
+
+    # Specialty members are selected by the book's own Type field, not by a
+    # hand-written list, so a new specialty arrow would appear on its own.
+    for e in r.suggestions[1:]:
+        assert e["fields"]["Type"] == "Specialty Arrow"
+
+    # [[arrows]] is untouched: still the definition-and-construction entry.
+    arrows = idx.search("arrows")
+    assert arrows.kind == "exact"
+    assert arrows.entry["category"] == "equipment rule"
+    assert "not considered weapons in their own right" in arrows.entry["text"]
+
+    embed = render(r, idx.rulebook)
+    assert embed.title == "Arrow Types (6)"
+    assert "__" not in embed.description        # flat list, no group headers

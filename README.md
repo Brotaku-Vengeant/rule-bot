@@ -138,6 +138,7 @@ found. Both are re-runnable when a new rulebook version comes out.
 | `[[magic items]]` · `[[relics]]` | Lists all 29 magic items, grouped as Trinkets, Talismans and Artifacts |
 | `[[armor]]` | Lists the 11 armor types and the 4 modifiers that adjust their rating |
 | `[[weapons]]` | Lists the 7 melee weapon types and 6 projectiles |
+| `[[arrow types]]` | Lists arrows and the five specialty arrows (`[[arrows]]` stays the construction rules) |
 | `/rule` | Slash command with autocomplete over all 439 terms |
 
 At most 5 `[[lookups]]` per message are answered, to keep spam impossible.
