@@ -684,3 +684,37 @@ def test_magic_items_list_groups_by_type():
     d = embed.description
     assert d.index("__Trinkets__") < d.index("__Talismans__") < d.index("__Artifacts__")
     assert embed.footer.text == 'Amtgard v8.08 "Spongy", pp.76-78'
+
+
+@real
+def test_armor_list_groups_modifiers_before_types():
+    from bot.formatting import render
+
+    idx = RuleIndex.load()
+    r = idx.search("armor")
+    assert r.kind == "list"
+    assert len(r.suggestions) == 15
+
+    groups = []
+    for e in r.suggestions:
+        if not groups or groups[-1][0] != e["section"]:
+            groups.append((e["section"], []))
+        groups[-1][1].append(e["name"])
+    # Book order by printed page: modifiers (p.11) precede types (p.12).
+    assert [g for g, _ in groups] == ["Armor Rating and Safety", "Armor Types"]
+    assert [len(n) for _, n in groups] == [4, 11]
+    assert groups[0][1] == ["Appearance", "Construction", "Helm Bonus", "Layered Armor"]
+    assert "Chainmail" in groups[1][1]
+
+    assert [e["name"] for e in r.related] == [
+        "Armor Combat Rules", "Armor Types and Modifiers", "Magic Armor"]
+    for alias in ("armors", "armour"):
+        assert idx.search(alias).kind == "list", alias
+
+    # Entries that used to be offered for [[armor]] are still their own lookups.
+    assert idx.search("magic armor").entry["category"] == "mechanic"
+    assert idx.search("armor breaking").entry["category"] == "special effect"
+
+    embed = render(r, idx.rulebook)
+    assert embed.title == "Armor (15)"
+    assert embed.footer.text == 'Amtgard v8.08 "Spongy", pp.11-12'

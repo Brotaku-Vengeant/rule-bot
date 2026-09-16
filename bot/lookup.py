@@ -46,6 +46,14 @@ LIST_COMMANDS = {
     "magic items": (("trinket", "talisman", "artifact"), "Magic Items", ()),
     "magic item": (("trinket", "talisman", "artifact"), "Magic Items", ()),
     "relics": (("trinket", "talisman", "artifact"), "Magic Items", ()),
+    # Armor types plus the modifiers that adjust their rating; "armour" is
+    # cheap to accept and someone will type it.
+    "armor": (("armor", "armor modifier"), "Armor",
+              ("Armor Combat Rules", "Armor Types and Modifiers", "Magic Armor")),
+    "armors": (("armor", "armor modifier"), "Armor",
+               ("Armor Combat Rules", "Armor Types and Modifiers", "Magic Armor")),
+    "armour": (("armor", "armor modifier"), "Armor",
+               ("Armor Combat Rules", "Armor Types and Modifiers", "Magic Armor")),
 }
 
 
@@ -168,9 +176,20 @@ class RuleIndex:
             categories = (category,) if isinstance(category, str) else category
             # Sections keep book order (so monster tiers run 1 to 4), names are
             # alphabetical within each. A single-section list is plain A-Z.
-            section_rank: dict[str, int] = {}
-            for e in self.entries:
-                section_rank.setdefault(e.get("section") or "", len(section_rank))
+            # Sections sort by their earliest printed page, so groups run in
+            # book order (armor modifiers on p.11 before armor types on p.12,
+            # which index order would have reversed). A book with no printed
+            # pages, like the Dor Un Avathar, keeps the order it was built in,
+            # which is the order its monster tiers appear.
+            NO_PAGE = 10 ** 6
+            section_rank: dict[str, tuple[int, int]] = {}
+            for i, e in enumerate(self.entries):
+                name = e.get("section") or ""
+                page = e.get("page") or NO_PAGE
+                if name not in section_rank:
+                    section_rank[name] = (page, i)
+                elif page < section_rank[name][0]:
+                    section_rank[name] = (page, section_rank[name][1])
             members = sorted((e for e in self.entries if e["category"] in categories),
                              key=lambda e: (section_rank[e.get("section") or ""],
                                             e["name"]))
